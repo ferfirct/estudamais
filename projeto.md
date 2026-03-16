@@ -6,12 +6,13 @@
 
 ## Integrantes do Grupo
 
-| Nome               | Função             |
-|--------------------|---------------------|
-| *(Inserir nome 1)* | *(Inserir função)*  |
-| *(Inserir nome 2)* | *(Inserir função)*  |
-| *(Inserir nome 3)* | *(Inserir função)*  |
-| *(Inserir nome 4)* | *(Inserir função)*  |
+| Nome               |
+|--------------------|
+| *Fernando Chociai* | 
+| *Gabriel Coltre* | 
+| *João Marcelo* |
+| *João Franze* |
+| *Leander Hallu* |
 
 ---
 
@@ -129,7 +130,25 @@ O **Estuda+** posiciona-se como uma ferramenta pessoal de estudo. O estudante é
 | **Sistema de Autenticação**   | Token de autenticação, dados do usuário                      | Credenciais de login                                                 |
 | **Banco de Dados**            | Sessões, notas e histórico armazenados                       | Dados de sessão, tema, tempo e nota para gravação                    |
 
-### 3.2 Diagrama C4 — Nível 1 (Contexto)
+### 3.2 Diagrama C4 — Nível 1 
+
+```mermaid
+flowchart TD
+    estudante["👤 Estudante\n[Person]\nUsuário que estuda, faz quizzes\ne acompanha seu desempenho."]
+
+    estudamais["🖥️ Estuda+\n[Software System]\nPlataforma de Estudo"]
+
+    ia_api["🤖 API da AI\n[Software System]\nAI que gera os Quiz\npara avaliação"]
+
+    estudante -->|"Estuda, faz quizzes e\nacompanha desempenho"| estudamais
+    estudamais -->|"Gera quizzes e\navalia respostas"| ia_api
+
+    style estudante fill:#08427B,stroke:#052E56,color:#FFFFFF,stroke-width:2px
+    style estudamais fill:#1168BD,stroke:#0B4884,color:#FFFFFF,stroke-width:2px
+    style ia_api fill:#999999,stroke:#6B6B6B,color:#FFFFFF,stroke-width:2px
+```
+
+### 3.2 Diagrama C4 — Nível 2 
 
 ```mermaid
 flowchart TD
@@ -158,12 +177,6 @@ flowchart TD
     style ia_api fill:#999999,stroke:#6B6B6B,color:#FFFFFF,stroke-width:2px
     style auth fill:#999999,stroke:#6B6B6B,color:#FFFFFF,stroke-width:2px
 ```
-
-**Legenda:**
-- 🟦 Azul escuro = Pessoa (ator)
-- 🔵 Azul = Sistema principal (Estuda+)
-- 🔵 Azul claro = Container interno (Banco de Dados)
-- ⬜ Cinza = Sistemas externos
 
 ### 3.3 Mapeamento dos Canais Técnicos
 
