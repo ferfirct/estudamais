@@ -28,13 +28,26 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }} 
           action: "upload"
           
-          # Configurações de local
-          app_location: "/" 
-          api_location: "" 
-          output_location: "dist"
+          ###### Configurações Ajustadas ######
           
-          # FORÇAR O BUILD MANUALMENTE (Ignorando a detecção automática problemática)
-          app_build_command: "npm install && npm run build"
+          # O segredo está aqui: apontar para a pasta onde está o Vite
+          app_location: "EstudaMais" 
           
-          # Pula a tentativa do Oryx de adivinhar o build
-          skip_app_build: false
+          api_location: ""
+          
+          # A pasta 'dist' será criada dentro de 'EstudaMais' pelo Vite
+          output_location: "dist" 
+          
+          ###### Fim das Configurações ######
+
+  close_pull_request_job:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    name: Close Pull Request Job
+    steps:
+      - name: Close Pull Request
+        id: closepullrequest
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BLACK_BAY_0BAD40610 }}
+          action: "close"
