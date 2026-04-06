@@ -29,19 +29,15 @@ jobs:
           action: "upload"
           
           ###### Configurações de Repositório/Build ######
+          app_location: "."          # Onde está o package.json
+          api_location: ""           # Vazio se não tiver API
+          output_location: "dist"    # Pasta gerada pelo build (Vite/React)
           
-          # Localização do código fonte (raiz do repo)
-          app_location: "." 
+          # Força o comando de build manualmente
+          app_build_command: "npm install && npm run build"
           
-          # Localização da API (deixe vazio se não houver Azure Functions)
-          api_location: "" 
-          
-          # Pasta onde o build é gerado (Ex: dist, build ou . se for HTML puro)
-          output_location: "dist" 
-          
-          # Comando para executar o build (Adicionado para corrigir o erro Oryx)
-          app_build_command: "npm run build"
-          
+          # Pula a detecção automática do Oryx se necessário
+          skip_app_build: false
           ###### Fim das Configurações ######
 
   close_pull_request_job:
