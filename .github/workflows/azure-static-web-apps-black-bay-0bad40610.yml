@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Build and Deploy Job
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4  # Atualizado para v4
         with:
           submodules: true
           lfs: false
@@ -28,12 +28,8 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }} 
           action: "upload"
           ###### Configurações de Repositório/Build ######
-          
-          # Se os seus arquivos (package.json, index.html) estão na raiz do repositório, use "/"
-          # Se estiverem dentro de uma pasta, certifique-se de que o nome está idêntico (letras maiúsculas/minúsculas)
-          app_location: "/" 
-          
-          api_location: ""
+          app_location: "."      # Alterado de "/" para "." (raiz)
+          api_location: "" 
           output_location: "dist" 
           ###### Fim das Configurações ######
 
