@@ -27,8 +27,14 @@ jobs:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BLACK_BAY_0BAD40610 }}
           repo_token: ${{ secrets.GITHUB_TOKEN }} 
           action: "upload"
+          
+          # Configurações de local
           app_location: "/" 
           api_location: "" 
           output_location: "dist"
-          # Esta linha abaixo é o segredo se a detecção falhar:
+          
+          # FORÇAR O BUILD MANUALMENTE (Ignorando a detecção automática problemática)
           app_build_command: "npm install && npm run build"
+          
+          # Pula a tentativa do Oryx de adivinhar o build
+          skip_app_build: false
