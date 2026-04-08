@@ -1,111 +1,220 @@
-:root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+/* Estuda+ — base layer global.
+   Tailwind (via Play CDN) fornece as utilities; este arquivo tem apenas
+   reset, tipografia base, efeitos ambiente e overrides do Recharts. */
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
-
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
-}
-
-body {
-  margin: 0;
-}
-
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+html {
+  scroll-behavior: smooth;
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100svh;
+  background: #07080d;
+  color: #f3f5f9;
+  font-family: 'DM Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-feature-settings: 'ss01', 'cv11';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
+
+#root {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  isolation: isolate;
 }
-p {
+
+/* Ambient background — gradientes sutis em camadas para dar profundidade */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 0%, rgba(34, 211, 167, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 50% at 80% 100%, rgba(56, 189, 248, 0.05) 0%, transparent 50%),
+    radial-gradient(ellipse 40% 30% at 50% 50%, rgba(34, 211, 167, 0.03) 0%, transparent 70%);
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 80%);
+}
+
+/* Scrollbar — emerald discreto */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #232740;
+  border-radius: 999px;
+  border: 2px solid #07080d;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #323852;
+}
+
+/* Seleção */
+::selection {
+  background: rgba(34, 211, 167, 0.35);
+  color: #f3f5f9;
+}
+
+/* Focus visível consistente */
+:focus-visible {
+  outline: 2px solid #22d3a7;
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+button:focus-visible,
+a:focus-visible,
+[role='button']:focus-visible {
+  outline-offset: 3px;
+}
+
+/* Tipografia display */
+.font-display {
+  letter-spacing: -0.025em;
+  font-feature-settings: 'ss01';
+}
+
+/* Números tabulares em métricas */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tornar inputs nativos consistentes */
+input,
+textarea,
+button,
+select {
+  font-family: inherit;
+  font-feature-settings: inherit;
+}
+
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
   margin: 0;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
+/* Card glass — blur sutil */
+.glass {
+  background: rgba(15, 17, 26, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+/* Recharts — tema escuro */
+.recharts-default-tooltip {
+  background: rgba(15, 17, 26, 0.96) !important;
+  border: 1px solid #232740 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.8) !important;
+  padding: 10px 14px !important;
+}
+.recharts-tooltip-label {
+  color: #f3f5f9 !important;
+  font-weight: 600 !important;
+  margin-bottom: 4px !important;
+}
+.recharts-tooltip-item {
+  color: #c5cbd9 !important;
+}
+.recharts-cartesian-axis-tick-value {
+  fill: #7a8199 !important;
+  font-size: 12px !important;
+}
+.recharts-cartesian-grid line {
+  stroke: #232740 !important;
+  stroke-dasharray: 3 3;
+}
+
+/* Confete — container fixo */
+.confetti-container {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  overflow: hidden;
+}
+.confetti-piece {
+  position: absolute;
+  top: -10px;
+  width: 10px;
+  height: 14px;
+  opacity: 0;
+  animation: confettiFall 2.8s ease-in forwards;
+}
+@keyframes confettiFall {
+  0% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(100vh) rotate(720deg);
+  }
+}
+
+/* Modo foco — vignette dramática */
+.focus-active::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 0%,
+    rgba(7, 8, 13, 0.7) 65%,
+    rgba(7, 8, 13, 0.95) 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+  animation: fadeIn 0.6s ease-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Toast container */
+.toast-enter {
+  animation: toastIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes toastIn {
+  0% { opacity: 0; transform: translateY(20px) scale(0.95); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -1,0 +1,33 @@
+import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
+import sessionsRouter from './routes/sessions.js';
+import quizRouter from './routes/quiz.js';
+import dashboardRouter from './routes/dashboard.js';
+import { errorHandler } from './middleware/errorHandler.js';
+
+const app = express();
+const port = Number(process.env.PORT ?? 3333);
+const frontendOrigin = process.env.FRONTEND_ORIGIN ?? 'http://localhost:5173';
+
+app.use(cors({ origin: frontendOrigin }));
+app.use(express.json({ limit: '1mb' }));
+
+app.use((req, _res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', service: 'estudamais-backend' });
+});
+
+app.use('/api/sessions', sessionsRouter);
+app.use('/api/quiz', quizRouter);
+app.use('/api/dashboard', dashboardRouter);
+
+app.use(errorHandler);
+
+app.listen(port, () => {
+  console.log(`[server] Estuda+ backend rodando em http://localhost:${port}`);
+});
