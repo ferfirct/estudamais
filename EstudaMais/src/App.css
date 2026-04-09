@@ -1,0 +1,9 @@
+/* No topo do seu App.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Seus estilos personalizados abaixo, se houver */
+.minha-classe-customizada {
+  color: gold;
+}

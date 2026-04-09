@@ -1,0 +1,21 @@
+# Usa a imagem oficial do Node.js (versão leve)
+FROM node:18-alpine
+
+# Cria a pasta do app dentro do container
+WORKDIR /usr/src/app
+
+# Copia os arquivos de dependências
+# (Mesmo que você não tenha o package.json ainda, o Docker vai procurar)
+COPY package*.json ./
+
+# Instala as bibliotecas necessárias
+RUN npm install
+
+# Copia o resto do seu código
+COPY . .
+
+# Expõe a porta 3000 (a mesma do código acima)
+EXPOSE 3000
+
+# Comando para ligar o serviço
+CMD ["node", "index.js"]
