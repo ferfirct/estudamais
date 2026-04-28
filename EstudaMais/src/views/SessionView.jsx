@@ -1,4 +1,4 @@
-// Tela de sessão de estudo — topic picker + cronômetro circular + modo foco.
+// Tela de sessão de performance — topic picker + cronômetro circular + modo foco.
 import { useState, useMemo } from 'react';
 import {
   Play,
@@ -29,7 +29,7 @@ const QUICK_SUGGESTIONS = [
 ];
 
 const POMODORO_PRESETS = [
-  { label: 'Rápido', minutes: 15, description: 'Revisão leve' },
+  { label: 'Rápido', minutes: 15, description: 'Medição rápida' },
   { label: 'Pomodoro', minutes: 25, description: 'Clássico' },
   { label: 'Foco', minutes: 45, description: 'Deep work' },
   { label: 'Maratona', minutes: 90, description: 'Tópicos densos' },
@@ -82,7 +82,7 @@ export default function SessionView({ onFinish, insights, dailyGoal, recentTheme
     if (final < 10) {
       toast({
         title: 'Sessão muito curta',
-        description: 'Estude por pelo menos 10 segundos.',
+        description: 'Processe por pelo menos 10 segundos.',
         variant: 'warning',
       });
       return;
@@ -156,17 +156,17 @@ export default function SessionView({ onFinish, insights, dailyGoal, recentTheme
         {/* Hero */}
         <div className="text-center mb-8">
           <Badge variant="accent" icon={Sparkles} className="mb-5">
-            Nova sessão de estudo
+            Nova sessão de performance
           </Badge>
           <h1 className="text-4xl md:text-5xl font-display font-bold text-text-primary mb-3 tracking-tight">
             O que você vai{' '}
             <span className="bg-gradient-to-r from-accent to-info bg-clip-text text-transparent">
-              dominar
+              processar
             </span>{' '}
             hoje?
           </h1>
           <p className="text-text-muted text-lg">
-            Escolha um tema, ajuste o tempo e a IA testa sua absorção no final.
+            Escolha um tema, ajuste o tempo e a IA mede sua retenção no final.
           </p>
         </div>
 
@@ -178,7 +178,7 @@ export default function SessionView({ onFinish, insights, dailyGoal, recentTheme
             onChange={(e) => setTopic(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleStart()}
             placeholder="Ex: Leis de Newton, Concordância verbal, Revolução Francesa..."
-            aria-label="Tema de estudo"
+            aria-label="Tema de performance"
             autoFocus
             className="text-lg py-4"
           />
@@ -218,7 +218,7 @@ export default function SessionView({ onFinish, insights, dailyGoal, recentTheme
             icon={Play}
             className="w-full mt-5"
           >
-            Iniciar sessão
+            Medir minha performance agora
           </Button>
 
           <p className="text-center text-2xs text-text-dim mt-3">
@@ -345,7 +345,7 @@ export default function SessionView({ onFinish, insights, dailyGoal, recentTheme
           size="lg"
           icon={Square}
         >
-          Finalizar e testar
+          Finalizar e medir
         </Button>
         <IconButton
           icon={RotateCcw}

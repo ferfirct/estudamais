@@ -1,4 +1,8 @@
 export * as sessionsApi from './sessions.js';
 export * as quizApi from './quiz.js';
 export * as dashboardApi from './dashboard.js';
+export * as streakApi from './streak.js';
+export * as recordsApi from './records.js';
+export * as reviewsApi from './reviews.js';
+export * as summaryApi from './summary.js';
 export { ApiError } from './client.js';

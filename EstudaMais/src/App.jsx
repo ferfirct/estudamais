@@ -1,6 +1,6 @@
 // Estuda+ — App shell. Navegação, estado global e toaster.
 import { useEffect, useMemo, useState } from 'react';
-import { GraduationCap, Timer, BarChart3 } from 'lucide-react';
+import { GraduationCap, Timer, BarChart3, Flame } from 'lucide-react';
 import SessionView from './views/SessionView.jsx';
 import QuizView from './views/QuizView.jsx';
 import DashboardView from './views/DashboardView.jsx';
@@ -12,6 +12,11 @@ import {
   saveDailyGoal,
   computeInsights,
   toast,
+  loadStreak,
+  updateStreak,
+  isStreakAtRisk,
+  scheduleStreakCheck,
+  requestNotificationPermission,
 } from './lib.js';
 
 export default function App() {
@@ -19,9 +24,14 @@ export default function App() {
   const [sessions, setSessions] = useState(() => loadSessions());
   const [pendingSession, setPendingSession] = useState(null);
   const [dailyGoal, setDailyGoal] = useState(() => loadDailyGoal());
+  const [streak, setStreak] = useState(() => loadStreak());
 
   useEffect(() => saveSessions(sessions), [sessions]);
   useEffect(() => saveDailyGoal(dailyGoal), [dailyGoal]);
+  useEffect(() => {
+    const s = updateStreak(sessions);
+    setStreak(s);
+  }, [sessions]);
 
   const insights = useMemo(() => computeInsights(sessions), [sessions]);
   const recentThemes = useMemo(() => {
@@ -51,9 +61,29 @@ export default function App() {
     }
     toast({
       title: 'Sessão salva',
-      description: `${full.topic} · nota ${full.score ?? '—'}`,
+      description: `${full.topic} · score ${full.score ?? '—'}`,
       variant: 'success',
     });
+    // Update streak
+    const newStreak = updateStreak([...sessions, full]);
+    setStreak(newStreak);
+    // Streak toast
+    if (newStreak.currentStreak > 0 && full.score != null) {
+      const prev = streak.currentStreak;
+      if (newStreak.currentStreak > prev) {
+        toast({
+          title: `🔥 Streak: ${newStreak.currentStreak} ${newStreak.currentStreak === 1 ? 'dia' : 'dias'}!`,
+          description: newStreak.currentStreak === newStreak.longestStreak && newStreak.currentStreak > 1
+            ? 'Novo recorde de streak!'
+            : 'Continue medindo para manter seu streak.',
+          variant: 'success',
+          duration: 5000,
+        });
+      }
+    }
+    // Schedule notification + request permission after 2nd session
+    scheduleStreakCheck(newStreak);
+    if (sessions.length >= 1) requestNotificationPermission();
   };
 
   const handleSkipQuiz = () => {
@@ -79,7 +109,7 @@ export default function App() {
     if (preset && typeof preset === 'string') {
       // preset vira pré-preenchimento — simples por enquanto
       setTimeout(() => {
-        const input = document.querySelector('input[aria-label="Tema de estudo"]');
+        const input = document.querySelector('input[aria-label="Tema de performance"]');
         if (input) {
           const nativeSetter = Object.getOwnPropertyDescriptor(
             window.HTMLInputElement.prototype,
@@ -94,8 +124,8 @@ export default function App() {
   };
 
   const navItems = [
-    { key: 'session', label: 'Estudar', icon: Timer },
-    { key: 'dashboard', label: 'Métricas', icon: BarChart3, badge: sessions.length },
+    { key: 'session', label: 'Medir', icon: Timer },
+    { key: 'dashboard', label: 'Perfil', icon: BarChart3, badge: sessions.length },
   ];
 
   return (
@@ -116,10 +146,25 @@ export default function App() {
                 Estuda<span className="text-accent">+</span>
               </span>
               <span className="block text-2xs text-text-muted mt-0.5">
-                Teste sua absorção
+                Meça sua eficiência cognitiva
               </span>
             </div>
           </button>
+
+          {/* Streak badge */}
+          {streak.currentStreak > 0 && (
+            <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-sm font-semibold transition-all ${
+              isStreakAtRisk(streak)
+                ? 'bg-warning-soft border border-warning/30 text-warning animate-pulse'
+                : 'bg-surface-2 border border-border text-text-secondary'
+            }`}>
+              <Flame size={14} className={isStreakAtRisk(streak) ? 'text-warning' : 'text-warning'} />
+              <span className="tabular font-mono">{streak.currentStreak}</span>
+              {isStreakAtRisk(streak) && (
+                <span className="text-2xs ml-0.5">em risco</span>
+              )}
+            </div>
+          )}
 
           <nav className="flex items-center gap-1" aria-label="Navegação principal">
             {navItems.map((item) => {
@@ -174,6 +219,7 @@ export default function App() {
             sessionData={pendingSession}
             onComplete={handleQuizComplete}
             onSkip={handleSkipQuiz}
+            sessions={sessions}
           />
         )}
         {view === 'dashboard' && (

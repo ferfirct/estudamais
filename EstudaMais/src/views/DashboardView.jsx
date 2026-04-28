@@ -1,4 +1,4 @@
-// Dashboard — KPIs, evolução, temas, histórico com busca, revisão crítica.
+// Dashboard — KPIs, evolução, temas, histórico com busca, oportunidades de melhora.
 import { useState, useMemo } from 'react';
 import {
   LineChart,
@@ -29,6 +29,7 @@ import {
   Zap,
   Award,
   GraduationCap,
+  CalendarClock,
 } from 'lucide-react';
 import { Button, Card, Badge, StatCard, EmptyState, IconButton, Input } from '../ui.jsx';
 import {
@@ -39,6 +40,7 @@ import {
   buildEvolutionSeries,
   exportSessionsJson,
   toast,
+  getReviewsDue,
 } from '../lib.js';
 
 export default function DashboardView({
@@ -65,17 +67,18 @@ export default function DashboardView({
   }, [sessions, query, filter]);
 
   const evolutionData = useMemo(() => buildEvolutionSeries(sessions), [sessions]);
+  const reviewsDue = useMemo(() => getReviewsDue(sessions), [sessions]);
 
   // Empty state
   if (sessions.length === 0) {
     return (
       <EmptyState
         icon={GraduationCap}
-        title="Nenhuma sessão ainda"
-        description="Comece sua primeira sessão de estudos e veja suas métricas de absorção aparecerem aqui."
+        title="Sem dados de performance ainda"
+        description="Inicie sua primeira medição de performance e veja seus índices de eficiência aparecerem aqui."
         action={
           <Button onClick={onStartSession} icon={BookOpen} size="lg">
-            Começar a estudar
+            Iniciar primeira medição
           </Button>
         }
       />
@@ -88,14 +91,14 @@ export default function DashboardView({
       <div className="flex flex-col md:flex-row md:items-end md:justify-between mb-8 gap-4">
         <div>
           <Badge variant="accent" icon={BarChart3} className="mb-3">
-            Dashboard
+            Perfil de performance
           </Badge>
           <h1 className="text-3xl md:text-4xl font-display font-bold text-text-primary tracking-tight">
-            Suas métricas de absorção
+            Seu perfil de performance
           </h1>
           <p className="text-text-muted mt-2">
             Índice de Eficiência ={' '}
-            <span className="font-mono text-accent">nota ÷ horas estudadas</span>
+            <span className="font-mono text-accent">nota ÷ horas processadas</span>
           </p>
         </div>
         <div className="flex gap-2">
@@ -142,7 +145,7 @@ export default function DashboardView({
           value={insights.streak}
           unit={insights.streak === 1 ? 'dia' : 'dias'}
           icon={Flame}
-          trend={insights.todayMinutes > 0 ? `${insights.todayMinutes}min hoje` : 'Estude hoje para manter'}
+          trend={insights.todayMinutes > 0 ? `${insights.todayMinutes}min hoje` : 'Meça hoje para manter'}
         />
       </div>
 
@@ -243,7 +246,63 @@ export default function DashboardView({
         </div>
       )}
 
-      {/* Revisão crítica */}
+      {/* Medir hoje — spaced repetition */}
+      {reviewsDue.length > 0 && (
+        <Card className="p-6 mb-8 border-accent-border bg-gradient-to-br from-accent-soft to-surface">
+          <div className="flex items-start gap-3 mb-5">
+            <div className="w-10 h-10 rounded-xl bg-accent-soft border border-accent-border flex items-center justify-center shrink-0">
+              <CalendarClock size={18} className="text-accent" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-display font-bold text-text-primary">
+                Medir hoje
+              </h3>
+              <p className="text-xs text-text-muted">
+                Temas que precisam de uma nova medição para manter sua evolução
+              </p>
+            </div>
+            <Badge variant="accent">{reviewsDue.length}</Badge>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {reviewsDue.map((r) => (
+              <button
+                key={r.theme}
+                onClick={() => onStartSession(r.theme)}
+                className="group text-left p-4 rounded-xl bg-surface-2 border border-border hover:border-accent-border transition-all"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-semibold text-text-primary">{r.theme}</span>
+                  <ArrowUpRight
+                    size={14}
+                    className="text-text-muted group-hover:text-accent transition-colors"
+                  />
+                </div>
+                <div className="flex items-center gap-3 text-xs text-text-muted">
+                  <span className="flex items-center gap-1">
+                    <Target size={11} />
+                    {r.lastScore}/10
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Clock size={11} />
+                    {r.daysOverdue > 0 ? `${r.daysOverdue}d atrasado` : 'hoje'}
+                  </span>
+                  <Badge
+                    variant={r.urgency === 'high' ? 'danger' : r.urgency === 'medium' ? 'warning' : 'default'}
+                    className="text-2xs"
+                  >
+                    {r.urgency === 'high' ? 'Urgente' : r.urgency === 'medium' ? 'Importante' : 'Agendado'}
+                  </Badge>
+                </div>
+                <div className="mt-2 text-xs text-accent font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+                  Medir agora →
+                </div>
+              </button>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Oportunidades de melhora */}
       {insights.criticalThemes.length > 0 && (
         <Card className="p-6 mb-8 border-warning/30 bg-gradient-to-br from-warning-soft to-surface">
           <div className="flex items-start gap-3 mb-5">
@@ -252,7 +311,7 @@ export default function DashboardView({
             </div>
             <div className="flex-1">
               <h3 className="text-lg font-display font-bold text-text-primary">
-                Revisão crítica
+                Oportunidades de melhora
               </h3>
               <p className="text-xs text-text-muted">
                 Temas com nota abaixo de 6 — priorize estes
@@ -317,7 +376,7 @@ export default function DashboardView({
           },
           {
             key: 'critical',
-            label: 'Críticas',
+            label: 'A melhorar',
             count: sessions.filter((s) => s.score != null && s.score < 6).length,
           },
         ].map((f) => (

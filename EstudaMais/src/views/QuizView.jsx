@@ -12,6 +12,10 @@ import {
   BarChart3,
   Trophy,
   Lightbulb,
+  Download,
+  Share2,
+  Copy,
+  Award,
 } from 'lucide-react';
 import { Button, Card, Badge, Skeleton, Textarea } from '../ui.jsx';
 import {
@@ -22,10 +26,12 @@ import {
   fireConfetti,
   toast,
   useKeyboard,
+  checkNewRecord,
+  loadSessions,
 } from '../lib.js';
 import { sessionsApi, quizApi, ApiError } from '../api';
 
-export default function QuizView({ sessionData, onComplete, onSkip }) {
+export default function QuizView({ sessionData, onComplete, onSkip, sessions = [] }) {
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
   const [currentQ, setCurrentQ] = useState(0);
@@ -33,6 +39,9 @@ export default function QuizView({ sessionData, onComplete, onSkip }) {
   const [evaluating, setEvaluating] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [showRecord, setShowRecord] = useState(null); // null | record object
+  const [recordDismissed, setRecordDismissed] = useState(false);
+  const shareCardRef = useRef(null);
 
   const backendSessionIdRef = useRef(null);
   const backendQuestionsRef = useRef([]);
@@ -62,10 +71,15 @@ export default function QuizView({ sessionData, onComplete, onSkip }) {
         session.id,
         Math.max(1, Math.round(sessionData.duration / 60))
       );
+      // Gather previous scores for adaptive difficulty
+      const previousScores = sessions
+        .filter((s) => s.topic === sessionData.topic && s.score != null)
+        .map((s) => s.score);
       const { questions: apiQs } = await quizApi.generateQuiz({
         sessionId: session.id,
         theme: sessionData.topic,
         durationMinutes: Math.max(1, Math.round(sessionData.duration / 60)),
+        previousScores: previousScores.length > 0 ? previousScores : undefined,
       });
       backendQuestionsRef.current = apiQs;
       setQuestions(normalizeQuestions(apiQs));
@@ -125,7 +139,19 @@ export default function QuizView({ sessionData, onComplete, onSkip }) {
         gapAnalysis: evalResult.gapAnalysis,
       };
       setResult(final);
-      if (final.score >= 9) {
+      // Check personal record
+      const efficiency = calcEfficiency(final.score, sessionData.duration);
+      const record = checkNewRecord(sessionData.topic, efficiency, final.score, sessions);
+      if (record.isNewRecord) {
+        setShowRecord(record);
+        fireConfetti();
+        toast({
+          title: '🏆 Novo recorde pessoal!',
+          description: `${record.recordType === 'efficiency' ? 'Eficiência' : 'Score'}: ${record.newBest}${record.unit}`,
+          variant: 'success',
+          duration: 6000,
+        });
+      } else if (final.score >= 9) {
         fireConfetti();
         toast({
           title: 'Performance excepcional!',
@@ -229,6 +255,89 @@ export default function QuizView({ sessionData, onComplete, onSkip }) {
     const efficiency = calcEfficiency(score, sessionData.duration);
     const scoreCls = scoreColor(score);
     const scoreBgCls = scoreBg(score);
+    const record = showRecord || checkNewRecord(sessionData.topic, efficiency, score, sessions);
+
+    // Share card generation
+    async function handleDownloadCard() {
+      const el = shareCardRef.current;
+      if (!el) return;
+      try {
+        const html2canvas = (await import('html2canvas')).default;
+        const canvas = await html2canvas(el, { backgroundColor: null, scale: 2 });
+        const link = document.createElement('a');
+        link.download = `estudaplus-${sessionData.topic.replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        toast({ title: 'Card baixado!', variant: 'success' });
+      } catch {
+        toast({ title: 'Erro ao gerar imagem', variant: 'error' });
+      }
+    }
+
+    async function handleCopyCard() {
+      const el = shareCardRef.current;
+      if (!el) return;
+      try {
+        const html2canvas = (await import('html2canvas')).default;
+        const canvas = await html2canvas(el, { backgroundColor: null, scale: 2 });
+        canvas.toBlob(async (blob) => {
+          if (blob) {
+            await navigator.clipboard.write([
+              new ClipboardItem({ 'image/png': blob }),
+            ]);
+            toast({ title: 'Card copiado!', variant: 'success' });
+          }
+        });
+      } catch {
+        toast({ title: 'Erro ao copiar', variant: 'error' });
+      }
+    }
+
+    // Record overlay
+    if (showRecord && !recordDismissed) {
+      return (
+        <div className="animate-in max-w-3xl mx-auto text-center">
+          <div className="record-reveal">
+            <div className="relative inline-flex flex-col items-center py-16">
+              <div className="absolute inset-0 bg-warning/10 blur-3xl rounded-full animate-pulse" />
+              <div className="relative">
+                <div className="w-32 h-32 rounded-full bg-gradient-to-br from-yellow-400 via-amber-500 to-orange-500 flex items-center justify-center shadow-glow-lg animate-scale-in mb-6">
+                  <Trophy size={56} className="text-bg" />
+                </div>
+              </div>
+              <h1 className="text-4xl md:text-5xl font-display font-black text-text-primary mb-3 tracking-tight">
+                NOVO RECORDE PESSOAL
+              </h1>
+              <p className="text-xl text-text-secondary font-semibold mb-2">
+                {showRecord.recordType === 'efficiency' ? 'Eficiência' : 'Score'}
+              </p>
+              <div className="flex items-center gap-4 mt-4">
+                <div className="text-center">
+                  <span className="block text-2xs uppercase tracking-wider text-text-muted mb-1">Anterior</span>
+                  <span className="text-2xl font-mono font-bold text-text-muted line-through">
+                    {showRecord.previousBest}{showRecord.unit}
+                  </span>
+                </div>
+                <div className="text-3xl text-accent font-bold">→</div>
+                <div className="text-center">
+                  <span className="block text-2xs uppercase tracking-wider text-accent mb-1">Novo</span>
+                  <span className="text-3xl font-mono font-bold text-accent">
+                    {showRecord.newBest}{showRecord.unit}
+                  </span>
+                </div>
+              </div>
+              <Button
+                onClick={() => setRecordDismissed(true)}
+                size="lg"
+                className="mt-10"
+              >
+                Ver resultado completo
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="animate-in max-w-3xl mx-auto">
@@ -249,6 +358,19 @@ export default function QuizView({ sessionData, onComplete, onSkip }) {
             </div>
             <span className="text-text-muted mt-4 font-medium">de 10 pontos</span>
           </div>
+
+          {/* Record info */}
+          {record.isNewRecord ? (
+            <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-yellow-500/20 to-amber-500/20 border border-yellow-500/30">
+              <Award size={16} className="text-yellow-400" />
+              <span className="text-sm font-semibold text-yellow-300">Recorde pessoal em {record.recordType === 'efficiency' ? 'eficiência' : 'score'}!</span>
+            </div>
+          ) : record.gap != null && record.gap > 0 ? (
+            <p className="text-text-muted mt-4 text-sm">
+              Faltou <span className="font-mono font-semibold text-text-secondary">{record.gap} pts/h</span> para bater seu recorde (<span className="font-mono text-accent">{record.previousBest} pts/h</span>)
+            </p>
+          ) : null}
+
           <h2 className="text-3xl font-display font-bold text-text-primary mt-6">
             {score >= 9
               ? 'Performance excepcional!'
@@ -256,7 +378,7 @@ export default function QuizView({ sessionData, onComplete, onSkip }) {
               ? 'Bom trabalho!'
               : score >= 5
               ? 'Você está no caminho.'
-              : 'Precisa revisar este tema.'}
+              : 'Oportunidade de evolução neste tema.'}
           </h2>
           <p className="text-text-muted mt-2">
             Tema: <span className="text-text-secondary">{sessionData.topic}</span>
@@ -300,6 +422,64 @@ export default function QuizView({ sessionData, onComplete, onSkip }) {
               <span className="text-sm text-text-muted ml-1">/ {questions.length}</span>
             </div>
           </Card>
+        </div>
+
+        {/* Shareable card (hidden for capture) */}
+        <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+          <div
+            ref={shareCardRef}
+            style={{
+              width: 480,
+              padding: 32,
+              borderRadius: 20,
+              background: 'linear-gradient(135deg, #0f111a 0%, #151826 100%)',
+              border: '1px solid #232740',
+              fontFamily: "'DM Sans', system-ui, sans-serif",
+              color: '#f3f5f9',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <span style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em' }}>
+                Estuda<span style={{ color: '#22d3a7' }}>+</span>
+              </span>
+              <span style={{ fontSize: 12, color: '#7a8199' }}>
+                @{new Date().toLocaleDateString('pt-BR')}
+              </span>
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 20, color: '#22d3a7' }}>
+              {sessionData.topic}
+            </div>
+            <div style={{ display: 'flex', gap: 24, marginBottom: 20 }}>
+              <div>
+                <div style={{ fontSize: 11, color: '#7a8199', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Score</div>
+                <div style={{ fontSize: 28, fontWeight: 800 }}>{score}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: '#7a8199', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Tempo</div>
+                <div style={{ fontSize: 28, fontWeight: 800 }}>{formatMinutes(sessionData.duration)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: '#7a8199', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Eficiência</div>
+                <div style={{ fontSize: 28, fontWeight: 800 }}>{efficiency} <span style={{ fontSize: 14, color: '#7a8199' }}>pts/h</span></div>
+              </div>
+            </div>
+            <div style={{ height: 8, borderRadius: 4, background: '#1c2030', overflow: 'hidden', marginBottom: 16 }}>
+              <div style={{ height: '100%', width: `${Math.min(100, score * 10)}%`, borderRadius: 4, background: 'linear-gradient(90deg, #22d3a7, #38bdf8)' }} />
+            </div>
+            <div style={{ fontSize: 13, color: '#7a8199', fontStyle: 'italic' }}>
+              "Não apenas conte as horas, meça sua eficiência."
+            </div>
+          </div>
+        </div>
+
+        {/* Share buttons */}
+        <div className="flex gap-2 mb-6">
+          <Button variant="secondary" icon={Download} onClick={handleDownloadCard} className="flex-1">
+            Baixar card
+          </Button>
+          <Button variant="secondary" icon={Copy} onClick={handleCopyCard} className="flex-1">
+            Copiar card
+          </Button>
         </div>
 
         {/* Gap analysis */}
@@ -346,7 +526,7 @@ export default function QuizView({ sessionData, onComplete, onSkip }) {
             className="flex-1"
             size="lg"
           >
-            Ver dashboard
+            Ver perfil
           </Button>
           <Button
             onClick={() =>
@@ -364,7 +544,7 @@ export default function QuizView({ sessionData, onComplete, onSkip }) {
             icon={RotateCcw}
             size="lg"
           >
-            Nova sessão
+            Nova medição
           </Button>
         </div>
       </div>
@@ -386,7 +566,7 @@ export default function QuizView({ sessionData, onComplete, onSkip }) {
             Avaliação: {sessionData.topic}
           </h2>
           <p className="text-xs text-text-muted mt-1">
-            {formatMinutes(sessionData.duration)} de estudo · {questions.length} questões
+            {formatMinutes(sessionData.duration)} de performance · {questions.length} questões
           </p>
         </div>
         <button

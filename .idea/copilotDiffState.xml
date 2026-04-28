@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CopilotDiffPersistence">
+    <option name="pendingDiffs">
+      <map>
+        <entry key="$PROJECT_DIR$/.idea/runConfigurations/Frontend.xml">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/.idea/runConfigurations/Frontend.xml" />
+              <option name="updatedContent" value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;component name=&quot;ProjectRunConfigurationManager&quot;&gt;&#10;  &lt;configuration default=&quot;false&quot; name=&quot;Frontend (Dev)&quot; type=&quot;js.build_tools.npm&quot; nameIsGenerated=&quot;false&quot;&gt;&#10;    &lt;package-json value=&quot;$PROJECT_DIR$/EstudaMais/package.json&quot; /&gt;&#10;    &lt;command value=&quot;run&quot; /&gt;&#10;    &lt;scripts&gt;&#10;      &lt;script value=&quot;dev&quot; /&gt;&#10;    &lt;/scripts&gt;&#10;    &lt;node-interpreter value=&quot;project&quot; /&gt;&#10;    &lt;envs /&gt;&#10;    &lt;method v=&quot;2&quot; /&gt;&#10;  &lt;/configuration&gt;&#10;&lt;/component&gt;&#10;" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>

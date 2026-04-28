@@ -53,8 +53,20 @@ function extractJson<T>(text: string): T {
 
 export async function generateQuiz(
   theme: string,
-  durationMinutes: number
+  durationMinutes: number,
+  previousScores?: number[]
 ): Promise<QuizQuestion[]> {
+  // Calculate difficulty based on history
+  function calcDifficulty(scores: number[]): string {
+    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+    if (avg < 5) return 'básico, foco em conceitos fundamentais';
+    if (avg <= 7) return 'intermediário, misture conceitos e aplicações';
+    return 'avançado, inclua casos-limite e pegadinhas conceituais';
+  }
+
+  const difficultyInstruction = previousScores?.length
+    ? `Histórico de scores neste tema: ${previousScores.join(', ')}. Nível de dificuldade: ${calcDifficulty(previousScores)}.`
+    : 'Nível de dificuldade: intermediário (primeiro contato com o tema).';
   const systemPrompt = `Você é um tutor acadêmico brasileiro. Gere quizzes em português (pt-BR).
 Retorne APENAS um JSON válido, sem markdown, no formato EXATO:
 {
@@ -78,9 +90,9 @@ Regras:
 - Gere entre 3 e 5 perguntas
 - Misture múltipla escolha (com 4 alternativas) e dissertativas curtas
 - Para multiple_choice, correctAnswer deve ser a letra (A, B, C ou D)
-- Nível médio de dificuldade`;
+- ${difficultyInstruction}`;
 
-  const userPrompt = `O aluno estudou "${theme}" por ${durationMinutes} minutos. Gere o quiz seguindo o formato.`;
+  const userPrompt = `O usuário processou "${theme}" por ${durationMinutes} minutos. Gere o quiz seguindo o formato.`;
 
   const raw = await chat([
     { role: 'system', content: systemPrompt },

@@ -11,6 +11,7 @@ const generateSchema = z.object({
   sessionId: z.string().min(1),
   theme: z.string().min(1),
   durationMinutes: z.number().nonnegative(),
+  previousScores: z.array(z.number()).optional(),
 });
 
 const questionSchema = z.object({
@@ -29,11 +30,19 @@ const evaluateSchema = z.object({
 
 router.post('/generate', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { sessionId, theme, durationMinutes } = generateSchema.parse(req.body);
+    const { sessionId, theme, durationMinutes, previousScores } = generateSchema.parse(req.body);
     if (!db.getSession(sessionId)) {
       throw new HttpError(404, 'Sessão não encontrada');
     }
-    const questions = await generateQuiz(theme, durationMinutes);
+    // Gather historical scores from db if not provided by client
+    let scores = previousScores;
+    if (!scores || scores.length === 0) {
+      const allSessions = db.listSessions();
+      scores = allSessions
+        .filter((s) => s.theme === theme && s.score !== null)
+        .map((s) => s.score as number);
+    }
+    const questions = await generateQuiz(theme, durationMinutes, scores.length > 0 ? scores : undefined);
     res.json({ sessionId, questions });
   } catch (err) {
     next(err);

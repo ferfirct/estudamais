@@ -4,6 +4,10 @@ import cors from 'cors';
 import sessionsRouter from './routes/sessions.js';
 import quizRouter from './routes/quiz.js';
 import dashboardRouter from './routes/dashboard.js';
+import streakRouter from './routes/streak.js';
+import recordsRouter from './routes/records.js';
+import reviewsRouter from './routes/reviews.js';
+import summaryRouter from './routes/summary.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 const app = express();
@@ -25,6 +29,10 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/sessions', sessionsRouter);
 app.use('/api/quiz', quizRouter);
 app.use('/api/dashboard', dashboardRouter);
+app.use('/api/streak', streakRouter);
+app.use('/api/records', recordsRouter);
+app.use('/api/reviews', reviewsRouter);
+app.use('/api/summary', summaryRouter);
 
 app.use(errorHandler);
 
