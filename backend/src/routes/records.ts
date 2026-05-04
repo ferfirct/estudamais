@@ -1,7 +1,9 @@
-import { Router, type Request, type Response } from 'express';
-import { db } from '../services/database.js';
+import { Router, type Response } from 'express';
+import { sessionDb } from '../services/database.js';
+import { requireAuth, type AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
+router.use(requireAuth);
 
 interface ThemeRecord {
   theme: string;
@@ -13,8 +15,8 @@ interface ThemeRecord {
   scores: number[];
 }
 
-function computeRecords(): Record<string, ThemeRecord> {
-  const sessions = db.listSessions();
+function computeRecords(userId: string): Record<string, ThemeRecord> {
+  const sessions = sessionDb.list(userId);
   const records: Record<string, ThemeRecord> = {};
 
   for (const s of sessions) {
@@ -43,9 +45,7 @@ function computeRecords(): Record<string, ThemeRecord> {
       rec.bestEfficiency = efficiency;
       rec.recordDate = s.createdAt;
     }
-    if (s.score > rec.bestScore) {
-      rec.bestScore = s.score;
-    }
+    if (s.score > rec.bestScore) rec.bestScore = s.score;
     if (s.score >= 7) {
       if (rec.shortestTimeForGoodScore === null || s.durationMinutes < rec.shortestTimeForGoodScore) {
         rec.shortestTimeForGoodScore = s.durationMinutes;
@@ -56,9 +56,8 @@ function computeRecords(): Record<string, ThemeRecord> {
   return records;
 }
 
-// GET /api/records — all themes' personal records
-router.get('/', (_req: Request, res: Response) => {
-  const records = computeRecords();
+router.get('/', (req: AuthRequest, res: Response) => {
+  const records = computeRecords(req.userId!);
   const result = Object.values(records).map(({ scores, ...rest }) => ({
     ...rest,
     avgScore: scores.length > 0
@@ -68,9 +67,8 @@ router.get('/', (_req: Request, res: Response) => {
   res.json(result);
 });
 
-// GET /api/records/:theme — specific theme details
-router.get('/:theme', (req: Request, res: Response) => {
-  const records = computeRecords();
+router.get('/:theme', (req: AuthRequest, res: Response) => {
+  const records = computeRecords(req.userId!);
   const theme = decodeURIComponent(req.params.theme);
   const record = records[theme];
 
@@ -79,8 +77,8 @@ router.get('/:theme', (req: Request, res: Response) => {
     return;
   }
 
-  // Build history for this theme
-  const sessions = db.listSessions()
+  const sessions = sessionDb
+    .list(req.userId!)
     .filter((s) => s.theme === theme && s.score !== null)
     .map((s) => ({
       date: s.createdAt,

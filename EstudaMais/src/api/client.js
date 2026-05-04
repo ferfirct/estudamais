@@ -1,5 +1,3 @@
-// Cliente HTTP centralizado para o backend Estuda+.
-// Base URL configurável via VITE_API_URL; fallback para localhost:3333.
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3333';
 
 export class ApiError extends Error {
@@ -11,18 +9,36 @@ export class ApiError extends Error {
   }
 }
 
+function getToken() {
+  return localStorage.getItem('estudaplus:token');
+}
+
+export function setToken(token) {
+  if (token) localStorage.setItem('estudaplus:token', token);
+  else localStorage.removeItem('estudaplus:token');
+}
+
 export async function request(path, { method = 'GET', body, signal } = {}) {
+  const token = getToken();
+  const headers = {};
+  if (body) headers['Content-Type'] = 'application/json';
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   let response;
   try {
     response = await fetch(`${BASE_URL}${path}`, {
       method,
-      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      headers,
       body: body ? JSON.stringify(body) : undefined,
       signal,
     });
   } catch (err) {
-    // Degradação graciosa: backend offline.
     throw new ApiError('Não foi possível conectar ao servidor.', 0, err);
+  }
+
+  if (response.status === 401) {
+    setToken(null);
+    window.dispatchEvent(new Event('auth:logout'));
   }
 
   const isJson = response.headers.get('content-type')?.includes('application/json');

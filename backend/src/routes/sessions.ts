@@ -1,11 +1,11 @@
-import { Router, type Request, type Response, type NextFunction } from 'express';
-import { randomUUID } from 'node:crypto';
+import { Router, type Response, type NextFunction } from 'express';
 import { z } from 'zod';
-import { db } from '../services/database.js';
+import { sessionDb } from '../services/database.js';
 import { HttpError } from '../middleware/errorHandler.js';
-import type { StudySession } from '../types/index.js';
+import { requireAuth, type AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
+router.use(requireAuth);
 
 const createSchema = z.object({
   theme: z.string().min(1),
@@ -19,59 +19,50 @@ const updateSchema = z.object({
   quizCompleted: z.boolean().optional(),
 });
 
-router.post('/', (req: Request, res: Response, next: NextFunction) => {
+router.post('/', (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const body = createSchema.parse(req.body);
-    const now = new Date().toISOString();
-    const session: StudySession = {
-      id: randomUUID(),
+    const session = sessionDb.create(req.userId!, {
       theme: body.theme,
-      startTime: body.startTime ?? now,
-      endTime: '',
-      durationMinutes: 0,
-      score: null,
-      efficiencyIndex: null,
-      quizCompleted: false,
-      createdAt: now,
-    };
-    db.createSession(session);
+      startTime: body.startTime ?? new Date().toISOString(),
+    });
     res.status(201).json(session);
   } catch (err) {
     next(err);
   }
 });
 
-router.patch('/:id', (req: Request, res: Response, next: NextFunction) => {
+router.patch('/:id', (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const body = updateSchema.parse(req.body);
-    const current = db.getSession(req.params.id);
+    const current = sessionDb.get(req.params.id, req.userId!);
     if (!current) throw new HttpError(404, 'Sessão não encontrada');
 
-    const merged: Partial<StudySession> = { ...body };
     const nextScore = body.score ?? current.score;
     const nextDuration = body.durationMinutes ?? current.durationMinutes;
-    if (nextScore !== null && nextDuration > 0) {
-      merged.efficiencyIndex = Number((nextScore / (nextDuration / 60)).toFixed(2));
-    }
-    const updated = db.updateSession(req.params.id, merged);
+    const efficiencyIndex =
+      nextScore !== null && nextDuration > 0
+        ? Number((nextScore / (nextDuration / 60)).toFixed(2))
+        : undefined;
+
+    const updated = sessionDb.update(req.params.id, req.userId!, {
+      ...body,
+      ...(efficiencyIndex !== undefined ? { efficiencyIndex } : {}),
+    });
     res.json(updated);
   } catch (err) {
     next(err);
   }
 });
 
-router.get('/', (req: Request, res: Response) => {
+router.get('/', (req: AuthRequest, res: Response) => {
   const needsReview = req.query.needsReview === 'true';
-  let sessions = db.listSessions();
-  if (needsReview) {
-    sessions = sessions.filter((s) => s.score !== null && s.score < 6);
-  }
-  res.json(sessions);
+  res.json(sessionDb.list(req.userId!, needsReview));
 });
 
-router.get('/:id', (req: Request, res: Response, next: NextFunction) => {
+router.get('/:id', (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const session = db.getSession(req.params.id);
+    const session = sessionDb.get(req.params.id, req.userId!);
     if (!session) throw new HttpError(404, 'Sessão não encontrada');
     res.json(session);
   } catch (err) {

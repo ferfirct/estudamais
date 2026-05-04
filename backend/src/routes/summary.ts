@@ -1,24 +1,23 @@
-import { Router, type Request, type Response } from 'express';
-import { db } from '../services/database.js';
+import { Router, type Response } from 'express';
+import { sessionDb } from '../services/database.js';
+import { requireAuth, type AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
+router.use(requireAuth);
 
 function getWeekBounds(weeksAgo = 0): { start: Date; end: Date } {
   const now = new Date();
   const dayOfWeek = now.getDay();
   const startOfWeek = new Date(now);
-  startOfWeek.setDate(now.getDate() - dayOfWeek - (weeksAgo * 7));
+  startOfWeek.setDate(now.getDate() - dayOfWeek - weeksAgo * 7);
   startOfWeek.setHours(0, 0, 0, 0);
-
   const endOfWeek = new Date(startOfWeek);
   endOfWeek.setDate(startOfWeek.getDate() + 7);
-
   return { start: startOfWeek, end: endOfWeek };
 }
 
-// GET /api/summary/weekly
-router.get('/weekly', (_req: Request, res: Response) => {
-  const sessions = db.listSessions();
+router.get('/weekly', (req: AuthRequest, res: Response) => {
+  const sessions = sessionDb.list(req.userId!);
   const thisWeek = getWeekBounds(0);
   const lastWeek = getWeekBounds(1);
 
@@ -39,7 +38,6 @@ router.get('/weekly', (_req: Request, res: Response) => {
       ? Number((withEfficiency.reduce((acc, s) => acc + (s.efficiencyIndex ?? 0), 0) / withEfficiency.length).toFixed(2))
       : 0;
 
-    // Best theme by avg score
     const byTheme: Record<string, { scoreSum: number; count: number }> = {};
     for (const s of scored) {
       const t = byTheme[s.theme] ?? { scoreSum: 0, count: 0 };
@@ -51,17 +49,12 @@ router.get('/weekly', (_req: Request, res: Response) => {
     let bestThemeScore = 0;
     for (const [theme, data] of Object.entries(byTheme)) {
       const avg = data.scoreSum / data.count;
-      if (avg > bestThemeScore) {
-        bestThemeScore = avg;
-        bestTheme = theme;
-      }
+      if (avg > bestThemeScore) { bestThemeScore = avg; bestTheme = theme; }
     }
 
-    // Activity array (7 bools: Sun-Sat)
     const activity: boolean[] = Array(7).fill(false);
     for (const s of weekSessions) {
-      const day = new Date(s.createdAt).getDay();
-      activity[day] = true;
+      activity[new Date(s.createdAt).getDay()] = true;
     }
 
     return {
@@ -79,7 +72,6 @@ router.get('/weekly', (_req: Request, res: Response) => {
   const current = weekStats(thisWeek.start, thisWeek.end);
   const previous = weekStats(lastWeek.start, lastWeek.end);
 
-  // Variations
   const variation = {
     sessions: current.totalSessions - previous.totalSessions,
     hours: Number((current.hoursProcessed - previous.hoursProcessed).toFixed(1)),

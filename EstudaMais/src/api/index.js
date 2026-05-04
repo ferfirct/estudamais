@@ -5,4 +5,6 @@ export * as streakApi from './streak.js';
 export * as recordsApi from './records.js';
 export * as reviewsApi from './reviews.js';
 export * as summaryApi from './summary.js';
-export { ApiError } from './client.js';
+export * as authApi from './auth.js';
+export * as settingsApi from './settings.js';
+export { ApiError, setToken } from './client.js';

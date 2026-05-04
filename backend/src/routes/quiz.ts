@@ -1,11 +1,13 @@
-import { Router, type Request, type Response, type NextFunction } from 'express';
+import { Router, type Response, type NextFunction } from 'express';
 import { z } from 'zod';
-import { db } from '../services/database.js';
+import { sessionDb } from '../services/database.js';
 import { HttpError } from '../middleware/errorHandler.js';
 import { generateQuiz, evaluateAnswers } from '../services/aiService.js';
+import { requireAuth, type AuthRequest } from '../middleware/auth.js';
 import type { QuizResult } from '../types/index.js';
 
 const router = Router();
+router.use(requireAuth);
 
 const generateSchema = z.object({
   sessionId: z.string().min(1),
@@ -28,17 +30,16 @@ const evaluateSchema = z.object({
   userAnswers: z.record(z.string()),
 });
 
-router.post('/generate', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/generate', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { sessionId, theme, durationMinutes, previousScores } = generateSchema.parse(req.body);
-    if (!db.getSession(sessionId)) {
+    if (!sessionDb.get(sessionId, req.userId!)) {
       throw new HttpError(404, 'Sessão não encontrada');
     }
-    // Gather historical scores from db if not provided by client
     let scores = previousScores;
     if (!scores || scores.length === 0) {
-      const allSessions = db.listSessions();
-      scores = allSessions
+      scores = sessionDb
+        .list(req.userId!)
         .filter((s) => s.theme === theme && s.score !== null)
         .map((s) => s.score as number);
     }
@@ -49,24 +50,20 @@ router.post('/generate', async (req: Request, res: Response, next: NextFunction)
   }
 });
 
-router.post('/evaluate', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/evaluate', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { sessionId, questions, userAnswers } = evaluateSchema.parse(req.body);
-    const session = db.getSession(sessionId);
+    const session = sessionDb.get(sessionId, req.userId!);
     if (!session) throw new HttpError(404, 'Sessão não encontrada');
 
-    const { score, gapAnalysis } = await evaluateAnswers(
-      session.theme,
-      questions,
-      userAnswers
-    );
+    const { score, gapAnalysis } = await evaluateAnswers(session.theme, questions, userAnswers);
 
     const efficiencyIndex =
       session.durationMinutes > 0
         ? Number((score / (session.durationMinutes / 60)).toFixed(2))
         : null;
 
-    db.updateSession(sessionId, { score, efficiencyIndex, quizCompleted: true });
+    sessionDb.update(sessionId, req.userId!, { score, efficiencyIndex, quizCompleted: true });
 
     const result: QuizResult = {
       sessionId,

@@ -1,0 +1,39 @@
+version: '3.9'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: estudamais-backend
+    ports:
+      - "3333:3333"
+    environment:
+      NODE_ENV: production
+      PORT: 3333
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost}
+      DB_PATH: /app/data/estuda.db
+    volumes:
+      - sqlite_data:/app/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./EstudaMais
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ""
+    container_name: estudamais-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  sqlite_data:
+    driver: local

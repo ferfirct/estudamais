@@ -1,5 +1,22 @@
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+}
+
+export interface UserSettings {
+  userId: string;
+  theme: 'dark' | 'light' | 'system';
+  dailyGoal: number;
+  language: string;
+  notifications: boolean;
+  updatedAt: string;
+}
+
 export interface StudySession {
   id: string;
+  userId: string;
   theme: string;
   startTime: string;
   endTime: string;

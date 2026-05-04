@@ -1,42 +1,18 @@
-import { Router, type Request, type Response, type NextFunction } from 'express';
-import { db } from '../services/database.js';
-import fs from 'node:fs';
-import path from 'node:path';
+import { Router, type Response } from 'express';
+import { sessionDb, streakFreezeDb } from '../services/database.js';
+import { requireAuth, type AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
-
-// Freeze state is stored alongside db.json
-const FREEZE_PATH = path.resolve(process.cwd(), 'streak-freeze.json');
-
-interface FreezeState {
-  streakFrozen: boolean;
-  weeklyFreezeUsed: boolean;
-  weekResetDate: string | null;
-}
-
-function loadFreezeState(): FreezeState {
-  try {
-    if (fs.existsSync(FREEZE_PATH)) {
-      return JSON.parse(fs.readFileSync(FREEZE_PATH, 'utf-8'));
-    }
-  } catch { /* ignore */ }
-  return { streakFrozen: false, weeklyFreezeUsed: false, weekResetDate: null };
-}
-
-function saveFreezeState(state: FreezeState): void {
-  fs.writeFileSync(FREEZE_PATH, JSON.stringify(state, null, 2));
-}
+router.use(requireAuth);
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-// GET /api/streak — calculates streak from session history
-router.get('/', (_req: Request, res: Response) => {
-  const sessions = db.listSessions();
+router.get('/', (req: AuthRequest, res: Response) => {
+  const sessions = sessionDb.list(req.userId!);
   const today = todayISO();
 
-  // Build set of days with at least 1 completed quiz
   const daysWithSession = new Set<string>();
   for (const s of sessions) {
     if (s.quizCompleted) {
@@ -44,7 +20,6 @@ router.get('/', (_req: Request, res: Response) => {
     }
   }
 
-  // Count consecutive days from today backwards
   let currentStreak = 0;
   const d = new Date();
   for (let i = 0; i < 365; i++) {
@@ -57,7 +32,6 @@ router.get('/', (_req: Request, res: Response) => {
     d.setDate(d.getDate() - 1);
   }
 
-  // Find longest streak ever
   const sortedDays = Array.from(daysWithSession).sort();
   let longestStreak = 0;
   let tempStreak = 0;
@@ -66,11 +40,7 @@ router.get('/', (_req: Request, res: Response) => {
     const curr = new Date(day);
     if (prevDate) {
       const diff = Math.floor((curr.getTime() - prevDate.getTime()) / 86400000);
-      if (diff === 1) {
-        tempStreak++;
-      } else {
-        tempStreak = 1;
-      }
+      tempStreak = diff === 1 ? tempStreak + 1 : 1;
     } else {
       tempStreak = 1;
     }
@@ -78,8 +48,8 @@ router.get('/', (_req: Request, res: Response) => {
     prevDate = curr;
   }
 
-  const lastSession = sessions[0]; // already sorted by createdAt desc
-  const freeze = loadFreezeState();
+  const lastSession = sessions[0];
+  const freeze = streakFreezeDb.get(req.userId!);
 
   res.json({
     currentStreak,
@@ -91,13 +61,11 @@ router.get('/', (_req: Request, res: Response) => {
   });
 });
 
-// PATCH /api/streak/freeze — activate weekly freeze
-router.patch('/freeze', (_req: Request, res: Response) => {
+router.patch('/freeze', (req: AuthRequest, res: Response) => {
   const today = todayISO();
   const now = new Date();
-  const freeze = loadFreezeState();
+  const freeze = streakFreezeDb.get(req.userId!);
 
-  // Reset on Sundays
   if (now.getDay() === 0 && freeze.weekResetDate !== today) {
     freeze.weeklyFreezeUsed = false;
     freeze.weekResetDate = today;
@@ -110,12 +78,9 @@ router.patch('/freeze', (_req: Request, res: Response) => {
 
   freeze.streakFrozen = true;
   freeze.weeklyFreezeUsed = true;
-  saveFreezeState(freeze);
+  streakFreezeDb.save(req.userId!, freeze);
 
-  res.json({
-    success: true,
-    message: 'Freeze ativado! Seu streak está protegido por 1 dia.',
-  });
+  res.json({ success: true, message: 'Freeze ativado! Seu streak está protegido por 1 dia.' });
 });
 
 export default router;

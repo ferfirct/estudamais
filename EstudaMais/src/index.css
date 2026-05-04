@@ -1,6 +1,89 @@
-/* Estuda+ — base layer global.
-   Tailwind (via Play CDN) fornece as utilities; este arquivo tem apenas
-   reset, tipografia base, efeitos ambiente e overrides do Recharts. */
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Colors */
+  --color-bg: #07080d;
+  --color-surface: #0f111a;
+  --color-surface-2: #151826;
+  --color-surface-3: #1c2030;
+  --color-surface-hover: #232840;
+  --color-border: #232740;
+  --color-border-strong: #323852;
+  --color-text-primary: #f3f5f9;
+  --color-text-secondary: #c5cbd9;
+  --color-text-muted: #7a8199;
+  --color-text-dim: #565c73;
+  --color-accent: #22d3a7;
+  --color-accent-hover: #14b893;
+  --color-accent-soft: rgba(34, 211, 167, 0.12);
+  --color-accent-border: rgba(34, 211, 167, 0.35);
+  --color-accent-dim: #0a5b48;
+  --color-danger: #f43f5e;
+  --color-danger-soft: rgba(244, 63, 94, 0.12);
+  --color-warning: #f59e0b;
+  --color-warning-soft: rgba(245, 158, 11, 0.12);
+  --color-success: #22c55e;
+  --color-success-soft: rgba(34, 197, 94, 0.12);
+  --color-info: #38bdf8;
+  --color-info-soft: rgba(56, 189, 248, 0.12);
+
+  /* Fonts */
+  --font-sans: 'DM Sans', system-ui, -apple-system, sans-serif;
+  --font-display: 'Outfit', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+
+  /* Font sizes */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+
+  /* Border radius */
+  --radius-4xl: 2rem;
+  --radius-5xl: 2.5rem;
+
+  /* Shadows */
+  --shadow-glow: 0 0 0 1px rgba(34,211,167,0.25), 0 10px 40px -10px rgba(34,211,167,0.35);
+  --shadow-glow-lg: 0 0 0 1px rgba(34,211,167,0.35), 0 20px 60px -12px rgba(34,211,167,0.5);
+  --shadow-card: 0 1px 0 0 rgba(255,255,255,0.04) inset, 0 20px 40px -24px rgba(0,0,0,0.8);
+  --shadow-elevated: 0 1px 0 0 rgba(255,255,255,0.06) inset, 0 30px 60px -24px rgba(0,0,0,0.9), 0 4px 16px -6px rgba(0,0,0,0.6);
+
+  /* Backdrop blur */
+  --blur-xs: 2px;
+
+  /* Animations */
+  --animate-in: fadeInUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-in-fast: fadeInUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-scale-in: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-slide-down: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-shimmer: shimmer 2s linear infinite;
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-spin-slow: spin 3s linear infinite;
+}
+
+@keyframes fadeInUp {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes scaleIn {
+  0% { opacity: 0; transform: scale(0.95); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes slideDown {
+  0% { opacity: 0; transform: translateY(-8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+/* ── Global Reset ─────────────────────────────────────────────────────────── */
 
 *,
 *::before,
@@ -33,7 +116,7 @@ body {
   isolation: isolate;
 }
 
-/* Ambient background — gradientes sutis em camadas para dar profundidade */
+/* Ambient background */
 body::before {
   content: '';
   position: fixed;
@@ -59,7 +142,7 @@ body::after {
   mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 80%);
 }
 
-/* Scrollbar — emerald discreto */
+/* Scrollbar */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -76,13 +159,11 @@ body::after {
   background: #323852;
 }
 
-/* Seleção */
 ::selection {
   background: rgba(34, 211, 167, 0.35);
   color: #f3f5f9;
 }
 
-/* Focus visível consistente */
 :focus-visible {
   outline: 2px solid #22d3a7;
   outline-offset: 3px;
@@ -94,18 +175,15 @@ a:focus-visible,
   outline-offset: 3px;
 }
 
-/* Tipografia display */
 .font-display {
   letter-spacing: -0.025em;
   font-feature-settings: 'ss01';
 }
 
-/* Números tabulares em métricas */
 .tabular {
   font-variant-numeric: tabular-nums;
 }
 
-/* Tornar inputs nativos consistentes */
 input,
 textarea,
 button,
@@ -120,14 +198,14 @@ input[type='number']::-webkit-inner-spin-button {
   margin: 0;
 }
 
-/* Card glass — blur sutil */
+/* Glass morphism */
 .glass {
   background: rgba(15, 17, 26, 0.7);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
 
-/* Recharts — tema escuro */
+/* Recharts dark theme */
 .recharts-default-tooltip {
   background: rgba(15, 17, 26, 0.96) !important;
   border: 1px solid #232740 !important;
@@ -152,7 +230,7 @@ input[type='number']::-webkit-inner-spin-button {
   stroke-dasharray: 3 3;
 }
 
-/* Confete — container fixo */
+/* Confetti */
 .confetti-container {
   position: fixed;
   inset: 0;
@@ -169,17 +247,11 @@ input[type='number']::-webkit-inner-spin-button {
   animation: confettiFall 2.8s ease-in forwards;
 }
 @keyframes confettiFall {
-  0% {
-    opacity: 1;
-    transform: translateY(0) rotate(0deg);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(100vh) rotate(720deg);
-  }
+  0% { opacity: 1; transform: translateY(0) rotate(0deg); }
+  100% { opacity: 0; transform: translateY(100vh) rotate(720deg); }
 }
 
-/* Modo foco — vignette dramática */
+/* Focus mode vignette */
 .focus-active::before {
   content: '';
   position: fixed;
@@ -199,7 +271,7 @@ input[type='number']::-webkit-inner-spin-button {
   to { opacity: 1; }
 }
 
-/* Toast container */
+/* Toast */
 .toast-enter {
   animation: toastIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -208,28 +280,17 @@ input[type='number']::-webkit-inner-spin-button {
   100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Record reveal — cinematic PR animation */
+/* Record reveal */
 .record-reveal {
   animation: recordReveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 @keyframes recordReveal {
-  0% {
-    opacity: 0;
-    transform: scale(0.7) translateY(40px);
-    filter: brightness(2) blur(10px);
-  }
-  40% {
-    opacity: 1;
-    filter: brightness(1.5) blur(0);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-    filter: brightness(1) blur(0);
-  }
+  0% { opacity: 0; transform: scale(0.7) translateY(40px); filter: brightness(2) blur(10px); }
+  40% { opacity: 1; filter: brightness(1.5) blur(0); }
+  100% { opacity: 1; transform: scale(1) translateY(0); filter: brightness(1) blur(0); }
 }
 
-/* Streak fire animation */
+/* Streak fire */
 .streak-fire {
   animation: streakFire 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -249,7 +310,3 @@ input[type='number']::-webkit-inner-spin-button {
     scroll-behavior: auto !important;
   }
 }
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;

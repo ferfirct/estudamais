@@ -1,98 +1,156 @@
-// Estuda+ — App shell. Navegação, estado global e toaster.
-import { useEffect, useMemo, useState } from 'react';
-import { GraduationCap, Timer, BarChart3, Flame } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { GraduationCap, Timer, BarChart3, Flame, Settings } from 'lucide-react';
 import SessionView from './views/SessionView.jsx';
 import QuizView from './views/QuizView.jsx';
 import DashboardView from './views/DashboardView.jsx';
+import AuthView from './views/AuthView.jsx';
+import SettingsView from './views/SettingsView.jsx';
 import { Toaster } from './ui.jsx';
+import { useTheme } from './hooks/useTheme.js';
+import { getMe } from './api/auth.js';
+import { getSettings } from './api/settings.js';
+import { listSessions } from './api/sessions.js';
+import { setToken } from './api/client.js';
 import {
-  loadSessions,
-  saveSessions,
-  loadDailyGoal,
-  saveDailyGoal,
   computeInsights,
   toast,
-  loadStreak,
-  updateStreak,
   isStreakAtRisk,
   scheduleStreakCheck,
   requestNotificationPermission,
 } from './lib.js';
 
+function mapForInsights(s) {
+  return {
+    ...s,
+    topic: s.theme,
+    duration: s.durationMinutes * 60,
+    startedAt: s.startTime,
+  };
+}
+
 export default function App() {
-  const [view, setView] = useState('session'); // session | quiz | dashboard
-  const [sessions, setSessions] = useState(() => loadSessions());
+  const [authReady, setAuthReady] = useState(false);
+  const [user, setUser] = useState(null);
+  const [view, setView] = useState('session');
+  const [sessions, setSessions] = useState([]);
   const [pendingSession, setPendingSession] = useState(null);
-  const [dailyGoal, setDailyGoal] = useState(() => loadDailyGoal());
-  const [streak, setStreak] = useState(() => loadStreak());
+  const [dailyGoal, setDailyGoal] = useState(60);
+  const [streak, setStreak] = useState({ currentStreak: 0, longestStreak: 0 });
 
-  useEffect(() => saveSessions(sessions), [sessions]);
-  useEffect(() => saveDailyGoal(dailyGoal), [dailyGoal]);
+  const { theme, setTheme } = useTheme('dark');
+
+  // On mount: check auth
   useEffect(() => {
-    const s = updateStreak(sessions);
-    setStreak(s);
-  }, [sessions]);
+    getMe()
+      .then((u) => {
+        setUser(u);
+        return Promise.all([
+          getSettings().catch(() => null),
+          listSessions().catch(() => []),
+        ]);
+      })
+      .then(([settings, apiSessions]) => {
+        if (settings) {
+          setDailyGoal(settings.dailyGoal ?? 60);
+          setTheme(settings.theme ?? 'dark');
+        }
+        if (apiSessions) setSessions(apiSessions);
+      })
+      .catch(() => { /* not authenticated */ })
+      .finally(() => setAuthReady(true));
+  }, []);
 
-  const insights = useMemo(() => computeInsights(sessions), [sessions]);
+  // Listen for 401 logout event
+  useEffect(() => {
+    function onLogout() {
+      setUser(null);
+      setSessions([]);
+    }
+    window.addEventListener('auth:logout', onLogout);
+    return () => window.removeEventListener('auth:logout', onLogout);
+  }, []);
+
+  const refreshSessions = useCallback(async () => {
+    try {
+      const data = await listSessions();
+      setSessions(data);
+    } catch { /* offline */ }
+  }, []);
+
+  const insights = useMemo(
+    () => computeInsights(sessions.map(mapForInsights)),
+    [sessions]
+  );
+
   const recentThemes = useMemo(() => {
     const seen = new Set();
     const out = [];
     for (const s of [...sessions].reverse()) {
-      if (!seen.has(s.topic)) {
-        seen.add(s.topic);
-        out.push(s.topic);
+      const key = s.theme;
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        out.push(key);
       }
     }
     return out;
   }, [sessions]);
+
+  const handleAuth = (u) => {
+    setUser(u);
+    Promise.all([getSettings().catch(() => null), listSessions().catch(() => [])])
+      .then(([settings, apiSessions]) => {
+        if (settings) {
+          setDailyGoal(settings.dailyGoal ?? 60);
+          setTheme(settings.theme ?? 'dark');
+        }
+        if (apiSessions) setSessions(apiSessions);
+      });
+  };
+
+  const handleLogout = () => {
+    setToken(null);
+    setUser(null);
+    setSessions([]);
+    setView('session');
+  };
 
   const handleSessionFinish = (data) => {
     setPendingSession(data);
     setView('quiz');
   };
 
-  const handleQuizComplete = (full) => {
-    setSessions((prev) => [...prev, full]);
+  const handleQuizComplete = async (full) => {
+    await refreshSessions();
     setPendingSession(null);
     if (full.startNew) {
       setView('session');
     } else {
       setView('dashboard');
     }
+    const theme = full.theme ?? full.topic ?? '';
     toast({
       title: 'Sessão salva',
-      description: `${full.topic} · score ${full.score ?? '—'}`,
+      description: `${theme} · score ${full.score ?? '—'}`,
       variant: 'success',
     });
-    // Update streak
-    const newStreak = updateStreak([...sessions, full]);
-    setStreak(newStreak);
-    // Streak toast
-    if (newStreak.currentStreak > 0 && full.score != null) {
-      const prev = streak.currentStreak;
-      if (newStreak.currentStreak > prev) {
+    if (full.score != null) {
+      const newStreak = { ...streak };
+      newStreak.currentStreak = Math.max(streak.currentStreak, 1);
+      if (newStreak.currentStreak > streak.currentStreak) {
         toast({
           title: `🔥 Streak: ${newStreak.currentStreak} ${newStreak.currentStreak === 1 ? 'dia' : 'dias'}!`,
-          description: newStreak.currentStreak === newStreak.longestStreak && newStreak.currentStreak > 1
-            ? 'Novo recorde de streak!'
-            : 'Continue medindo para manter seu streak.',
+          description: 'Continue medindo para manter seu streak.',
           variant: 'success',
           duration: 5000,
         });
       }
+      scheduleStreakCheck(newStreak);
     }
-    // Schedule notification + request permission after 2nd session
-    scheduleStreakCheck(newStreak);
     if (sessions.length >= 1) requestNotificationPermission();
   };
 
-  const handleSkipQuiz = () => {
-    if (pendingSession) {
-      setSessions((prev) => [
-        ...prev,
-        { ...pendingSession, score: null, gaps: null, strengths: null },
-      ]);
-    }
+  const handleSkipQuiz = async () => {
+    await refreshSessions();
     setPendingSession(null);
     setView('dashboard');
   };
@@ -107,7 +165,6 @@ export default function App() {
   const handleStartSession = (preset) => {
     setView('session');
     if (preset && typeof preset === 'string') {
-      // preset vira pré-preenchimento — simples por enquanto
       setTimeout(() => {
         const input = document.querySelector('input[aria-label="Tema de performance"]');
         if (input) {
@@ -123,14 +180,22 @@ export default function App() {
     }
   };
 
+  // Not ready yet — blank screen during auth check
+  if (!authReady) return null;
+
+  // Not authenticated — show auth screen
+  if (!user) return <AuthView onAuth={handleAuth} />;
+
   const navItems = [
     { key: 'session', label: 'Medir', icon: Timer },
     { key: 'dashboard', label: 'Perfil', icon: BarChart3, badge: sessions.length },
+    { key: 'settings', label: 'Config', icon: Settings },
   ];
+
+  const streakAtRisk = isStreakAtRisk(streak);
 
   return (
     <>
-      {/* Header */}
       <header className="sticky top-0 z-40 glass border-b border-border">
         <div className="max-w-6xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
           <button
@@ -145,24 +210,23 @@ export default function App() {
               <span className="block text-lg font-display font-extrabold text-text-primary tracking-tight leading-none">
                 Estuda<span className="text-accent">+</span>
               </span>
-              <span className="block text-2xs text-text-muted mt-0.5">
-                Meça sua eficiência cognitiva
+              <span className="block text-2xs text-text-muted mt-0.5 hidden sm:block">
+                Olá, {user.name.split(' ')[0]}
               </span>
             </div>
           </button>
 
-          {/* Streak badge */}
           {streak.currentStreak > 0 && (
-            <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-sm font-semibold transition-all ${
-              isStreakAtRisk(streak)
-                ? 'bg-warning-soft border border-warning/30 text-warning animate-pulse'
-                : 'bg-surface-2 border border-border text-text-secondary'
-            }`}>
-              <Flame size={14} className={isStreakAtRisk(streak) ? 'text-warning' : 'text-warning'} />
+            <div
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-sm font-semibold transition-all ${
+                streakAtRisk
+                  ? 'bg-warning-soft border border-warning/30 text-warning animate-pulse'
+                  : 'bg-surface-2 border border-border text-text-secondary'
+              }`}
+            >
+              <Flame size={14} className="text-warning" />
               <span className="tabular font-mono">{streak.currentStreak}</span>
-              {isStreakAtRisk(streak) && (
-                <span className="text-2xs ml-0.5">em risco</span>
-              )}
+              {streakAtRisk && <span className="text-2xs ml-0.5">em risco</span>}
             </div>
           )}
 
@@ -174,10 +238,7 @@ export default function App() {
               return (
                 <button
                   key={item.key}
-                  onClick={() => {
-                    if (disabled) return;
-                    setView(item.key);
-                  }}
+                  onClick={() => { if (!disabled) setView(item.key); }}
                   disabled={disabled}
                   aria-current={active ? 'page' : undefined}
                   className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
@@ -204,7 +265,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main */}
       <main className="flex-1 w-full max-w-6xl mx-auto px-4 md:px-6 py-10 md:py-16 relative z-10">
         {view === 'session' && (
           <SessionView
@@ -231,9 +291,15 @@ export default function App() {
             onEditGoal={setDailyGoal}
           />
         )}
+        {view === 'settings' && (
+          <SettingsView
+            user={user}
+            onLogout={handleLogout}
+            onThemeChange={setTheme}
+          />
+        )}
       </main>
 
-      {/* Footer */}
       <footer className="border-t border-border mt-auto">
         <div className="max-w-6xl mx-auto px-4 md:px-6 py-6 flex flex-col md:flex-row items-center justify-between gap-3">
           <p className="text-2xs text-text-dim">
@@ -242,7 +308,7 @@ export default function App() {
           <p className="text-2xs text-text-dim">
             Feito com <span className="text-accent">React</span> +{' '}
             <span className="text-accent">Tailwind</span> +{' '}
-            <span className="text-accent">Claude</span>
+            <span className="text-accent">Groq</span>
           </p>
         </div>
       </footer>

@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import sessionsRouter from './routes/sessions.js';
 import quizRouter from './routes/quiz.js';
 import dashboardRouter from './routes/dashboard.js';
@@ -8,6 +9,8 @@ import streakRouter from './routes/streak.js';
 import recordsRouter from './routes/records.js';
 import reviewsRouter from './routes/reviews.js';
 import summaryRouter from './routes/summary.js';
+import authRouter from './routes/auth.js';
+import settingsRouter from './routes/settings.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 const app = express();
@@ -22,11 +25,22 @@ app.use((req, _res, next) => {
   next();
 });
 
+const quizLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: 'Muitas requisições. Aguarde um momento.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', service: 'estudamais-backend' });
 });
 
+app.use('/api/auth', authRouter);
+app.use('/api/settings', settingsRouter);
 app.use('/api/sessions', sessionsRouter);
+app.use('/api/quiz/generate', quizLimiter);
 app.use('/api/quiz', quizRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/streak', streakRouter);

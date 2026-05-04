@@ -1,7 +1,9 @@
-import { Router, type Request, type Response } from 'express';
-import { db } from '../services/database.js';
+import { Router, type Response } from 'express';
+import { sessionDb } from '../services/database.js';
+import { requireAuth, type AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
+router.use(requireAuth);
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -19,12 +21,10 @@ function calcNextReview(score: number, lastDate: string): string {
   return d.toISOString().slice(0, 10);
 }
 
-// GET /api/reviews/due — themes needing review today or overdue
-router.get('/due', (_req: Request, res: Response) => {
-  const sessions = db.listSessions();
+router.get('/due', (req: AuthRequest, res: Response) => {
+  const sessions = sessionDb.list(req.userId!);
   const today = todayISO();
 
-  // Group by theme: only latest scored session matters
   const latestByTheme: Record<string, { score: number; date: string }> = {};
   for (const s of sessions) {
     if (s.score === null) continue;
@@ -56,9 +56,8 @@ router.get('/due', (_req: Request, res: Response) => {
   res.json(due);
 });
 
-// GET /api/reviews/schedule — full review calendar
-router.get('/schedule', (_req: Request, res: Response) => {
-  const sessions = db.listSessions();
+router.get('/schedule', (req: AuthRequest, res: Response) => {
+  const sessions = sessionDb.list(req.userId!);
 
   const latestByTheme: Record<string, { score: number; date: string }> = {};
   for (const s of sessions) {
