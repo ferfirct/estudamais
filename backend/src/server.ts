@@ -2,16 +2,16 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import sessionsRouter from './routes/sessions.js';
-import quizRouter from './routes/quiz.js';
-import dashboardRouter from './routes/dashboard.js';
-import streakRouter from './routes/streak.js';
-import recordsRouter from './routes/records.js';
-import reviewsRouter from './routes/reviews.js';
-import summaryRouter from './routes/summary.js';
-import authRouter from './routes/auth.js';
-import settingsRouter from './routes/settings.js';
-import { errorHandler } from './middleware/errorHandler.js';
+import { errorHandler } from './shared/middleware/errorHandler.js';
+import authRouter from './features/auth/auth.routes.js';
+import settingsRouter from './features/settings/settings.routes.js';
+import sessionRouter from './features/session/session.routes.js';
+import quizRouter from './features/quiz/quiz.routes.js';
+import dashboardRouter from './features/dashboard/dashboard.routes.js';
+import streakRouter from './features/streak/streak.routes.js';
+import recordsRouter from './features/records/records.routes.js';
+import reviewsRouter from './features/reviews/reviews.routes.js';
+import summaryRouter from './features/summary/summary.routes.js';
 
 const app = express();
 const port = Number(process.env.PORT ?? 3333);
@@ -39,7 +39,7 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/auth', authRouter);
 app.use('/api/settings', settingsRouter);
-app.use('/api/sessions', sessionsRouter);
+app.use('/api/sessions', sessionRouter);
 app.use('/api/quiz/generate', quizLimiter);
 app.use('/api/quiz', quizRouter);
 app.use('/api/dashboard', dashboardRouter);
