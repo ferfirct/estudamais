@@ -27,7 +27,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/src/services/schema.sql ./dist/services/schema.sql
 
-VOLUME ["/app/data"]
+
 
 ENV NODE_ENV=production
 ENV PORT=3333
