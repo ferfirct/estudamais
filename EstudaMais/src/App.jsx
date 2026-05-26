@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { GraduationCap, Timer, BarChart3, Flame, Settings } from 'lucide-react';
+import { GraduationCap, Timer, BarChart3, Flame, Settings, Dumbbell } from 'lucide-react';
 import SessionView from './views/SessionView.jsx';
 import QuizView from './views/QuizView.jsx';
 import DashboardView from './views/DashboardView.jsx';
 import AuthView from './views/AuthView.jsx';
 import SettingsView from './views/SettingsView.jsx';
+import PracticeView from './views/PracticeView.jsx';
 import { Toaster } from './ui.jsx';
 import { useTheme } from './hooks/useTheme.js';
 import { getMe } from './api/auth.js';
@@ -119,13 +120,23 @@ export default function App() {
     setView('quiz');
   };
 
+  const handleStartPractice = (practiceData) => {
+    setPendingSession({ ...practiceData, duration: 0 });
+    setView('quiz');
+  };
+
+  const handleStartWrongPractice = (practiceData) => {
+    setPendingSession(practiceData);
+    setView('quiz');
+  };
+
   const handleQuizComplete = async (full) => {
     await refreshSessions();
     setPendingSession(null);
     if (full.startNew) {
-      setView('session');
+      setView(full.practiceMode ? 'practice' : 'session');
     } else {
-      setView('dashboard');
+      setView(full.practiceMode ? 'practice' : 'dashboard');
     }
     const theme = full.theme ?? full.topic ?? '';
     toast({
@@ -187,9 +198,9 @@ export default function App() {
   if (!user) return <AuthView onAuth={handleAuth} />;
 
   const navItems = [
-    { key: 'session', label: 'Medir', icon: Timer },
-    { key: 'dashboard', label: 'Perfil', icon: BarChart3, badge: sessions.length },
-    { key: 'settings', label: 'Config', icon: Settings },
+    { key: 'session', label: 'Estudar', icon: Timer },
+    { key: 'practice', label: 'Praticar', icon: Dumbbell },
+    { key: 'dashboard', label: 'Métricas', icon: BarChart3, badge: sessions.length },
   ];
 
   const streakAtRisk = isStreakAtRisk(streak);
@@ -289,6 +300,12 @@ export default function App() {
             onClearHistory={handleClearHistory}
             onStartSession={handleStartSession}
             onEditGoal={setDailyGoal}
+          />
+        )}
+        {view === 'practice' && (
+          <PracticeView
+            onStartPractice={handleStartPractice}
+            onStartWrongPractice={handleStartWrongPractice}
           />
         )}
         {view === 'settings' && (

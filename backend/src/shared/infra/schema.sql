@@ -41,3 +41,19 @@ CREATE TABLE IF NOT EXISTS streak_freeze (
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON sessions(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sessions_theme ON sessions(theme);
+
+CREATE TABLE IF NOT EXISTS wrong_questions (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  session_id  TEXT NOT NULL,
+  theme       TEXT NOT NULL,
+  question    TEXT NOT NULL,
+  user_answer TEXT NOT NULL,
+  quiz_type   TEXT NOT NULL DEFAULT 'free',
+  difficulty  TEXT NOT NULL DEFAULT 'medium',
+  saved_at    TEXT NOT NULL,
+  retried     INTEGER NOT NULL DEFAULT 0,
+  retried_at  TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_wrong_questions_user_id ON wrong_questions(user_id);

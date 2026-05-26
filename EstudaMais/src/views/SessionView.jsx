@@ -13,6 +13,7 @@ import {
   TrendingUp,
   RotateCcw,
   Zap,
+  Info,
 } from 'lucide-react';
 import { Button, IconButton, Card, Input, Badge, ProgressBar } from '../ui.jsx';
 import { formatTime, formatMinutes, useTimer, useKeyboard, toast } from '../lib.js';
@@ -38,6 +39,13 @@ const POMODORO_PRESETS = [
 export default function SessionView({ onFinish, insights, dailyGoal, recentThemes }) {
   const [topic, setTopic] = useState('');
   const [targetMinutes, setTargetMinutes] = useState(25);
+  const [questionCount, setQuestionCount] = useState(5);
+  const [questionDistribution, setQuestionDistribution] = useState({ multipleChoice: 5, summation: 0, discursive: 0 });
+  const [difficulty, setDifficulty] = useState('medium');
+  const [learningMode, setLearningMode] = useState(false);
+  const [quizType, setQuizType] = useState('free');
+  const [explainAfterAnswer, setExplainAfterAnswer] = useState(true);
+  const [distributionError, setDistributionError] = useState('');
   const timer = useTimer();
 
   const progress = useMemo(() => {
@@ -74,6 +82,10 @@ export default function SessionView({ onFinish, insights, dailyGoal, recentTheme
       toast({ title: 'Digite um tema primeiro', variant: 'warning' });
       return;
     }
+    if (distributionError) {
+      toast({ title: 'Corrija a distribuição de questões', variant: 'warning' });
+      return;
+    }
     timer.start();
   };
 
@@ -92,6 +104,12 @@ export default function SessionView({ onFinish, insights, dailyGoal, recentTheme
       duration: final,
       targetMinutes,
       startedAt: new Date().toISOString(),
+      questionCount,
+      questionDistribution,
+      difficulty,
+      learningMode,
+      quizType,
+      explainAfterAnswer,
     });
     setTopic('');
   };
@@ -209,6 +227,246 @@ export default function SessionView({ onFinish, insights, dailyGoal, recentTheme
                 <p className="text-2xs text-text-muted">{p.description}</p>
               </button>
             ))}
+          </div>
+
+          {/* Seção A — Questões */}
+          <div className="mt-8">
+            <p className="text-2xs font-semibold uppercase tracking-wider text-text-muted mb-3">
+              Questões
+            </p>
+            <div className="grid grid-cols-4 gap-2">
+              {[3, 5, 8, 10].map((num) => (
+                <button
+                  key={num}
+                  onClick={() => {
+                    setQuestionCount(num);
+                    setQuestionDistribution({ multipleChoice: num, summation: 0, discursive: 0 });
+                    setDistributionError('');
+                  }}
+                  className={`p-3 rounded-xl border transition-all text-left ${
+                    questionCount === num
+                      ? 'bg-accent-soft border-accent-border shadow-glow'
+                      : 'bg-surface-2 border-border hover:border-border-strong'
+                  }`}
+                  aria-pressed={questionCount === num}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span
+                      className={`text-xs font-semibold ${
+                        questionCount === num ? 'text-accent' : 'text-text-secondary'
+                      }`}
+                    >
+                      {num}
+                    </span>
+                  </div>
+                  <p className="text-2xs text-text-muted">{num === 3 ? 'Rápido' : num === 5 ? 'Recomendado' : num === 8 ? 'Profundo' : 'Extenso'}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Seção B — Distribuição */}
+          <div className="mt-8">
+            <p className="text-2xs font-semibold uppercase tracking-wider text-text-muted mb-3">
+              Distribuição de tipos
+            </p>
+            <Card className="p-4">
+              <div className="grid grid-cols-3 gap-3 mb-3">
+                <div>
+                  <label className="text-xs font-semibold text-text-secondary block mb-2">
+                    Múltipla escolha
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={questionCount}
+                    value={questionDistribution.multipleChoice}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 0;
+                      setQuestionDistribution({ ...questionDistribution, multipleChoice: val });
+                      const total = val + questionDistribution.summation + questionDistribution.discursive;
+                      if (total !== questionCount) {
+                        setDistributionError(`A soma deve ser igual a ${questionCount}`);
+                      } else {
+                        setDistributionError('');
+                      }
+                    }}
+                    className="w-full bg-surface-2 border border-border rounded-xl px-3 py-2 text-sm text-text-primary text-center focus:outline-none focus:border-accent"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-text-secondary block mb-2">
+                    Somatória
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={questionCount}
+                    value={questionDistribution.summation}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 0;
+                      setQuestionDistribution({ ...questionDistribution, summation: val });
+                      const total = questionDistribution.multipleChoice + val + questionDistribution.discursive;
+                      if (total !== questionCount) {
+                        setDistributionError(`A soma deve ser igual a ${questionCount}`);
+                      } else {
+                        setDistributionError('');
+                      }
+                    }}
+                    className="w-full bg-surface-2 border border-border rounded-xl px-3 py-2 text-sm text-text-primary text-center focus:outline-none focus:border-accent"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-text-secondary block mb-2">
+                    Discursiva
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={questionCount}
+                    value={questionDistribution.discursive}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 0;
+                      setQuestionDistribution({ ...questionDistribution, discursive: val });
+                      const total = questionDistribution.multipleChoice + questionDistribution.summation + val;
+                      if (total !== questionCount) {
+                        setDistributionError(`A soma deve ser igual a ${questionCount}`);
+                      } else {
+                        setDistributionError('');
+                      }
+                    }}
+                    className="w-full bg-surface-2 border border-border rounded-xl px-3 py-2 text-sm text-text-primary text-center focus:outline-none focus:border-accent"
+                  />
+                </div>
+              </div>
+              {distributionError ? (
+                <p className="text-xs text-danger mt-2">{distributionError}</p>
+              ) : (
+                <p className="text-xs text-accent mt-2">
+                  {questionDistribution.multipleChoice} + {questionDistribution.summation} + {questionDistribution.discursive} = {questionCount} ✓
+                </p>
+              )}
+            </Card>
+          </div>
+
+          {/* Seção C — Dificuldade */}
+          <div className="mt-8">
+            <p className="text-2xs font-semibold uppercase tracking-wider text-text-muted mb-3">
+              Dificuldade
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { label: 'Fácil', value: 'easy', detail: 'básico' },
+                { label: 'Médio', value: 'medium', detail: 'aplicação' },
+                { label: 'Difícil', value: 'hard', detail: 'análise crítica' },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setDifficulty(opt.value)}
+                  className={`p-3 rounded-xl border transition-all text-left ${
+                    difficulty === opt.value
+                      ? 'bg-accent-soft border-accent-border shadow-glow'
+                      : 'bg-surface-2 border-border hover:border-border-strong'
+                  }`}
+                  aria-pressed={difficulty === opt.value}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span
+                      className={`text-xs font-semibold ${
+                        difficulty === opt.value ? 'text-accent' : 'text-text-secondary'
+                      }`}
+                    >
+                      {opt.label}
+                    </span>
+                    <span className="text-xs font-mono text-text-muted">{opt.detail}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Seção D — Tipo de questão */}
+          <div className="mt-8">
+            <p className="text-2xs font-semibold uppercase tracking-wider text-text-muted mb-3">
+              Tipo de questão
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { label: 'Estudo livre', value: 'free' },
+                { label: 'Concurso público', value: 'civil_service' },
+                { label: 'Vestibular', value: 'vestibular' },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setQuizType(opt.value)}
+                  className={`p-3 rounded-xl border transition-all text-left ${
+                    quizType === opt.value
+                      ? 'bg-accent-soft border-accent-border shadow-glow'
+                      : 'bg-surface-2 border-border hover:border-border-strong'
+                  }`}
+                  aria-pressed={quizType === opt.value}
+                >
+                  <span
+                    className={`text-xs font-semibold ${
+                      quizType === opt.value ? 'text-accent' : 'text-text-secondary'
+                    }`}
+                  >
+                    {opt.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {(quizType === 'civil_service' || quizType === 'vestibular') && (
+              <p className="text-2xs text-text-muted mt-2 flex items-center gap-1">
+                <Info size={11} />
+                A IA se baseia em questões reais deste tipo de prova.
+              </p>
+            )}
+          </div>
+
+          {/* Seção E — Toggles */}
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Card className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-text-primary">Modo aprendizado</p>
+                <p className="text-2xs text-text-muted">A IA traz uma dica teórica antes de cada pergunta, sem revelar a resposta</p>
+              </div>
+              <button
+                role="switch"
+                aria-checked={learningMode}
+                onClick={() => setLearningMode(!learningMode)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ml-4 ${
+                  learningMode ? 'bg-accent' : 'bg-surface-3 border border-border'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    learningMode ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </Card>
+
+            <Card className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-text-primary">Explicar após cada resposta</p>
+                <p className="text-2xs text-text-muted">A IA explica por que cada alternativa está certa ou errada antes de avançar</p>
+              </div>
+              <button
+                role="switch"
+                aria-checked={explainAfterAnswer}
+                onClick={() => setExplainAfterAnswer(!explainAfterAnswer)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ml-4 ${
+                  explainAfterAnswer ? 'bg-accent' : 'bg-surface-3 border border-border'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    explainAfterAnswer ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </Card>
           </div>
 
           <Button

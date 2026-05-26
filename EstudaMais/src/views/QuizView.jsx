@@ -16,6 +16,8 @@ import {
   Share2,
   Copy,
   Award,
+  GraduationCap,
+  MessageCircle,
 } from 'lucide-react';
 import { Button, Card, Badge, Skeleton, Textarea } from '../ui.jsx';
 import {
@@ -32,6 +34,17 @@ import {
 import { sessionsApi, quizApi, ApiError } from '../api';
 
 export default function QuizView({ sessionData, onComplete, onSkip, sessions = [] }) {
+  const {
+    topic,
+    duration,
+    quizType = 'free',
+    explainAfterAnswer = true,
+    questionCount = 5,
+    questionDistribution,
+    difficulty = 'medium',
+    learningMode = false,
+  } = sessionData;
+
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
   const [currentQ, setCurrentQ] = useState(0);
@@ -39,46 +52,88 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
   const [evaluating, setEvaluating] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const [showRecord, setShowRecord] = useState(null); // null | record object
+  const [showRecord, setShowRecord] = useState(null);
   const [recordDismissed, setRecordDismissed] = useState(false);
   const shareCardRef = useRef(null);
+
+  const [questionPhase, setQuestionPhase] = useState('answering');
+  // 'answering' | 'explaining' | 'asking_doubt'
+  const [currentExplanation, setCurrentExplanation] = useState('');
+  const [loadingExplanation, setLoadingExplanation] = useState(false);
+  const [doubtHistory, setDoubtHistory] = useState([]);
+  const [currentDoubt, setCurrentDoubt] = useState('');
+  const [loadingDoubt, setLoadingDoubt] = useState(false);
+  const [summationChecks, setSummationChecks] = useState({});
 
   const backendSessionIdRef = useRef(null);
   const backendQuestionsRef = useRef([]);
 
   useEffect(() => {
+    if (sessionData.questions && sessionData.questions.length > 0 && sessionData.sessionId) {
+      backendSessionIdRef.current = sessionData.sessionId;
+      backendQuestionsRef.current = sessionData.questions;
+      setQuestions(normalizeQuestions(sessionData.questions));
+      setLoading(false);
+      return;
+    }
     generateQuiz();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    setQuestionPhase('answering');
+    setCurrentExplanation('');
+    setDoubtHistory([]);
+    setCurrentDoubt('');
+  }, [currentQ]);
+
+  useEffect(() => {
+    const q = questions[currentQ];
+    if (q && q.type === 'summation') {
+      handleAnswer(currentQ, calcSummationAnswer(currentQ, q));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [summationChecks, currentQ]);
+
   function normalizeQuestions(api) {
     return api.map((q, i) => ({
       id: q.id ?? `q${i + 1}`,
-      type: q.type === 'open_ended' ? 'open' : 'multiple_choice',
+      type: q.type === 'open_ended' ? 'open' : q.type === 'summation' ? 'summation' : 'multiple_choice',
       question: q.question,
       options: q.options,
       correct: q.correctAnswer,
+      correctAnswer: q.correctAnswer,
+      summationItems: q.summationItems,
+      hint: q.hint,
+      learningHint: q.learningHint,
     }));
+  }
+
+  function calcSummationAnswer(questionIndex, question) {
+    const checks = summationChecks[questionIndex] || {};
+    const total = (question.summationItems || [])
+      .filter(item => checks[item.value])
+      .reduce((acc, item) => acc + item.value, 0);
+    return String(total).padStart(2, '0');
   }
 
   async function generateQuiz() {
     setLoading(true);
     setError(null);
     try {
-      const session = await sessionsApi.createSession(sessionData.topic);
+      const session = await sessionsApi.createSession(topic);
       backendSessionIdRef.current = session.id;
       await sessionsApi.finishSession(
         session.id,
-        Math.max(1, Math.round(sessionData.duration / 60))
+        Math.max(1, Math.round(duration / 60))
       );
-      // Gather previous scores for adaptive difficulty
       const previousScores = sessions
-        .filter((s) => s.topic === sessionData.topic && s.score != null)
+        .filter((s) => s.topic === topic && s.score != null)
         .map((s) => s.score);
       const { questions: apiQs } = await quizApi.generateQuiz({
         sessionId: session.id,
-        theme: sessionData.topic,
-        durationMinutes: Math.max(1, Math.round(sessionData.duration / 60)),
+        theme: topic,
+        durationMinutes: Math.max(1, Math.round(duration / 60)),
         previousScores: previousScores.length > 0 ? previousScores : undefined,
       });
       backendQuestionsRef.current = apiQs;
@@ -93,22 +148,21 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
           : 'Falha ao gerar quiz. Usando perguntas padrão.';
       setError(msg);
       toast({ title: 'Modo offline', description: msg, variant: 'warning' });
-      // Fallback local
       setQuestions([
         {
           id: 'q1',
           type: 'open',
-          question: `Explique com suas palavras o conceito principal de "${sessionData.topic}".`,
+          question: `Explique com suas palavras o conceito principal de "${topic}".`,
         },
         {
           id: 'q2',
           type: 'open',
-          question: `Cite dois exemplos práticos relacionados a "${sessionData.topic}".`,
+          question: `Cite dois exemplos práticos relacionados a "${topic}".`,
         },
         {
           id: 'q3',
           type: 'open',
-          question: `Qual a importância de "${sessionData.topic}" no contexto da disciplina?`,
+          question: `Qual a importância de "${topic}" no contexto da disciplina?`,
         },
       ]);
     }
@@ -139,9 +193,8 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
         gapAnalysis: evalResult.gapAnalysis,
       };
       setResult(final);
-      // Check personal record
-      const efficiency = calcEfficiency(final.score, sessionData.duration);
-      const record = checkNewRecord(sessionData.topic, efficiency, final.score, sessions);
+      const efficiency = calcEfficiency(final.score, duration);
+      const record = checkNewRecord(topic, efficiency, final.score, sessions);
       if (record.isNewRecord) {
         setShowRecord(record);
         fireConfetti();
@@ -184,20 +237,96 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
   }
 
   const handleAnswer = (i, v) => setAnswers((prev) => ({ ...prev, [i]: v }));
-  const canNext = answers[currentQ] !== undefined && answers[currentQ] !== '';
+  const canNext = answers[currentQ] !== undefined
+    && answers[currentQ] !== ''
+    && answers[currentQ] !== '00';
   const isLast = currentQ === questions.length - 1;
   const allAnswered = questions.every((_, i) => answers[i]);
+
+  async function handleConfirmAnswer() {
+    if (!explainAfterAnswer) return;
+    setLoadingExplanation(true);
+    setQuestionPhase('explaining');
+    try {
+      const q = questions[currentQ];
+      const backendQ = backendQuestionsRef.current[currentQ] ?? q;
+      const result = await quizApi.explainQuestion({
+        theme: topic,
+        question: backendQ,
+        userAnswer: answers[currentQ] ?? '',
+        quizType,
+      });
+      setCurrentExplanation(result.explanation);
+
+      const currentQuestion = questions[currentQ];
+      const userAns = answers[currentQ] ?? '';
+      const isWrong = currentQuestion.correctAnswer
+        ? userAns !== currentQuestion.correctAnswer
+        : false;
+      const shouldSave = isWrong || currentQuestion.type === 'open';
+
+      if (shouldSave && backendSessionIdRef.current) {
+        const backendQ = backendQuestionsRef.current[currentQ] ?? currentQuestion;
+        quizApi.saveWrongQuestion({
+          sessionId: backendSessionIdRef.current,
+          theme: topic,
+          question: backendQ,
+          userAnswer: userAns,
+          quizType,
+          difficulty,
+        }).catch(() => {});
+      }
+    } catch {
+      setCurrentExplanation(
+        'Não foi possível carregar a explicação. Você pode avançar para a próxima questão.'
+      );
+    }
+    setLoadingExplanation(false);
+  }
+
+  async function handleSendDoubt() {
+    if (!currentDoubt.trim()) return;
+    const doubtText = currentDoubt;
+    const updatedHistory = [...doubtHistory, { role: 'user', content: doubtText }];
+    setDoubtHistory(updatedHistory);
+    setCurrentDoubt('');
+    setLoadingDoubt(true);
+    try {
+      const q = questions[currentQ];
+      const backendQ = backendQuestionsRef.current[currentQ] ?? q;
+      const result = await quizApi.askDoubt({
+        theme: topic,
+        question: backendQ,
+        correctAnswer: q.correctAnswer,
+        userAnswer: answers[currentQ] ?? '',
+        explanation: currentExplanation,
+        doubt: doubtText,
+        history: doubtHistory,
+      });
+      setDoubtHistory([...updatedHistory, { role: 'assistant', content: result.answer }]);
+    } catch {
+      setDoubtHistory([
+        ...updatedHistory,
+        { role: 'assistant', content: 'Não foi possível responder agora. Tente novamente.' },
+      ]);
+    }
+    setLoadingDoubt(false);
+  }
+
+  function goToNextQuestion() {
+    setCurrentQ(q => q + 1);
+  }
 
   useKeyboard(
     {
       ArrowRight: () => {
-        if (!loading && !result && canNext && !isLast) setCurrentQ((q) => q + 1);
+        if (!loading && !result && canNext && !isLast && questionPhase === 'answering') setCurrentQ((q) => q + 1);
       },
       ArrowLeft: () => {
-        if (!loading && !result && currentQ > 0) setCurrentQ((q) => q - 1);
+        if (!loading && !result && currentQ > 0 && questionPhase === 'answering') setCurrentQ((q) => q - 1);
       },
     },
-    [loading, result, canNext, isLast, currentQ]
+    [loading, result, canNext, isLast, currentQ, questionPhase]
   );
 
   // ──────────────────────────────────────────────────────────
@@ -218,7 +347,7 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
           </h2>
           <p className="text-text-muted">
             Preparando perguntas sobre{' '}
-            <span className="text-accent font-semibold">{sessionData.topic}</span>
+            <span className="text-accent font-semibold">{topic}</span>
           </p>
         </div>
 
@@ -252,12 +381,11 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
   // ──────────────────────────────────────────────────────────
   if (result) {
     const score = result.score;
-    const efficiency = calcEfficiency(score, sessionData.duration);
+    const efficiency = calcEfficiency(score, duration);
     const scoreCls = scoreColor(score);
     const scoreBgCls = scoreBg(score);
-    const record = showRecord || checkNewRecord(sessionData.topic, efficiency, score, sessions);
+    const record = showRecord || checkNewRecord(topic, efficiency, score, sessions);
 
-    // Share card generation
     async function handleDownloadCard() {
       const el = shareCardRef.current;
       if (!el) return;
@@ -265,7 +393,7 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
         const html2canvas = (await import('html2canvas')).default;
         const canvas = await html2canvas(el, { backgroundColor: null, scale: 2 });
         const link = document.createElement('a');
-        link.download = `estudaplus-${sessionData.topic.replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.png`;
+        link.download = `estudaplus-${topic.replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.png`;
         link.href = canvas.toDataURL('image/png');
         link.click();
         toast({ title: 'Card baixado!', variant: 'success' });
@@ -293,7 +421,6 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
       }
     }
 
-    // Record overlay
     if (showRecord && !recordDismissed) {
       return (
         <div className="animate-in max-w-3xl mx-auto text-center">
@@ -359,7 +486,6 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
             <span className="text-text-muted mt-4 font-medium">de 10 pontos</span>
           </div>
 
-          {/* Record info */}
           {record.isNewRecord ? (
             <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-yellow-500/20 to-amber-500/20 border border-yellow-500/30">
               <Award size={16} className="text-yellow-400" />
@@ -381,7 +507,7 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
               : 'Oportunidade de evolução neste tema.'}
           </h2>
           <p className="text-text-muted mt-2">
-            Tema: <span className="text-text-secondary">{sessionData.topic}</span>
+            Tema: <span className="text-text-secondary">{topic}</span>
           </p>
         </div>
 
@@ -395,7 +521,7 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
               </span>
             </div>
             <div className="text-2xl font-display font-bold text-text-primary tabular">
-              {formatMinutes(sessionData.duration)}
+              {formatMinutes(duration)}
             </div>
           </Card>
           <Card className="p-5">
@@ -447,7 +573,7 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
               </span>
             </div>
             <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 20, color: '#22d3a7' }}>
-              {sessionData.topic}
+              {topic}
             </div>
             <div style={{ display: 'flex', gap: 24, marginBottom: 20 }}>
               <div>
@@ -456,7 +582,7 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
               </div>
               <div>
                 <div style={{ fontSize: 11, color: '#7a8199', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Tempo</div>
-                <div style={{ fontSize: 28, fontWeight: 800 }}>{formatMinutes(sessionData.duration)}</div>
+                <div style={{ fontSize: 28, fontWeight: 800 }}>{formatMinutes(duration)}</div>
               </div>
               <div>
                 <div style={{ fontSize: 11, color: '#7a8199', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Eficiência</div>
@@ -563,10 +689,10 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
       <div className="flex items-start justify-between mb-6">
         <div>
           <h2 className="text-xl font-display font-bold text-text-primary">
-            Avaliação: {sessionData.topic}
+            Avaliação: {topic}
           </h2>
           <p className="text-xs text-text-muted mt-1">
-            {formatMinutes(sessionData.duration)} de performance · {questions.length} questões
+            {formatMinutes(duration)} de performance · {questions.length} questões
           </p>
         </div>
         <button
@@ -601,12 +727,26 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
         ))}
       </div>
 
+      {/* Learning hint (before question card) */}
+      {q.learningHint && (
+        <div className="p-4 rounded-2xl bg-info-soft border border-info/30 mb-4 flex items-start gap-3 animate-in">
+          <Lightbulb size={18} className="text-info shrink-0 mt-0.5" />
+          <div>
+            <p className="text-xs font-semibold text-info mb-1">Dica teórica</p>
+            <p className="text-sm text-text-secondary leading-relaxed">{q.learningHint}</p>
+          </div>
+        </div>
+      )}
+
       {/* Question card */}
       <Card className="p-6 md:p-8" key={currentQ}>
         <div className="flex items-center gap-2 mb-5">
-          <Badge variant={q.type === 'multiple_choice' ? 'info' : 'accent'}>
-            {q.type === 'multiple_choice' ? 'Múltipla escolha' : 'Dissertativa'}
+          <Badge variant={q.type === 'multiple_choice' ? 'info' : q.type === 'summation' ? 'warning' : 'accent'}>
+            {q.type === 'multiple_choice' ? 'Múltipla escolha' : q.type === 'summation' ? 'Somatória' : 'Dissertativa'}
           </Badge>
+          {q.hint && (
+            <Badge variant="default" className="ml-2 text-2xs">{q.hint}</Badge>
+          )}
           <span className="text-xs text-text-muted">
             {currentQ + 1} de {questions.length}
           </span>
@@ -620,38 +760,96 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
           <div className="space-y-2.5">
             {q.options?.map((opt, oi) => {
               const letter = String.fromCharCode(65 + oi);
-              const selected = answers[currentQ] === letter;
+              const isSelected = answers[currentQ] === letter;
+              const isCorrect = q.correctAnswer === letter;
+              const isExplaining = questionPhase !== 'answering';
               return (
                 <button
                   key={oi}
-                  onClick={() => handleAnswer(currentQ, letter)}
+                  onClick={() => {
+                    if (!isExplaining) handleAnswer(currentQ, letter);
+                  }}
+                  disabled={isExplaining}
                   className={`w-full text-left p-4 rounded-xl border-2 transition-all flex items-center gap-3 ${
-                    selected
-                      ? 'bg-accent-soft border-accent shadow-glow'
-                      : 'bg-surface-2 border-border hover:border-border-strong'
-                  }`}
-                  aria-pressed={selected}
+                    isExplaining
+                      ? isCorrect
+                        ? 'bg-success-soft border-success/50'
+                        : isSelected
+                          ? 'bg-danger-soft border-danger/50'
+                          : 'bg-surface-2 border-border opacity-60'
+                      : isSelected
+                        ? 'bg-accent-soft border-accent shadow-glow'
+                        : 'bg-surface-2 border-border hover:border-border-strong'
+                  } ${isExplaining ? 'cursor-default' : ''}`}
+                  aria-pressed={isSelected}
                 >
                   <div
                     className={`w-8 h-8 shrink-0 rounded-lg flex items-center justify-center font-mono font-bold text-sm ${
-                      selected
-                        ? 'bg-accent text-bg'
-                        : 'bg-surface-3 text-text-muted'
+                      isExplaining
+                        ? isCorrect
+                          ? 'bg-success text-bg'
+                          : isSelected
+                            ? 'bg-danger text-bg'
+                            : 'bg-surface-3 text-text-muted'
+                        : isSelected
+                          ? 'bg-accent text-bg'
+                          : 'bg-surface-3 text-text-muted'
                     }`}
                   >
                     {letter}
                   </div>
-                  <span
-                    className={`flex-1 ${
-                      selected ? 'text-text-primary' : 'text-text-secondary'
-                    }`}
-                  >
+                  <span className={`flex-1 ${isSelected ? 'text-text-primary' : 'text-text-secondary'}`}>
                     {opt}
                   </span>
-                  {selected && <Check size={18} className="text-accent" />}
+                  {isSelected && !isExplaining && <Check size={18} className="text-accent" />}
+                  {isExplaining && isCorrect && <Check size={18} className="text-success" />}
                 </button>
               );
             })}
+          </div>
+        ) : q.type === 'summation' ? (
+          <div className="space-y-2.5">
+            {(q.summationItems || []).map((item) => {
+              const checked = (summationChecks[currentQ] || {})[item.value] || false;
+              const isExplaining = questionPhase !== 'answering';
+              return (
+                <button
+                  key={item.value}
+                  onClick={() => {
+                    if (isExplaining) return;
+                    setSummationChecks(prev => ({
+                      ...prev,
+                      [currentQ]: {
+                        ...(prev[currentQ] || {}),
+                        [item.value]: !checked,
+                      },
+                    }));
+                  }}
+                  disabled={isExplaining}
+                  className={`w-full text-left p-4 rounded-xl border-2 transition-all flex items-center gap-3 ${
+                    checked
+                      ? 'bg-accent-soft border-accent shadow-glow'
+                      : 'bg-surface-2 border-border hover:border-border-strong'
+                  } ${isExplaining ? 'cursor-default opacity-80' : ''}`}
+                >
+                  <div className={`w-8 h-8 shrink-0 rounded-lg flex items-center justify-center font-mono font-bold text-xs ${
+                    checked ? 'bg-accent text-bg' : 'bg-surface-3 text-text-muted'
+                  }`}>
+                    {String(item.value).padStart(2, '0')}
+                  </div>
+                  <span className={`flex-1 text-sm ${checked ? 'text-text-primary' : 'text-text-secondary'}`}>
+                    {item.statement}
+                  </span>
+                  {checked && <Check size={16} className="text-accent" />}
+                </button>
+              );
+            })}
+            <div className="flex items-center justify-between pt-2 px-1">
+              <span className="text-xs text-text-muted">Soma selecionada:</span>
+              <span className="text-sm font-mono font-bold text-accent">
+                {answers[currentQ] || '00'}
+              </span>
+            </div>
           </div>
         ) : (
           <Textarea
@@ -662,6 +860,89 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
             aria-label={`Resposta da questão ${currentQ + 1}`}
           />
         )}
+
+        {/* Explanation card */}
+        {(questionPhase === 'explaining' || questionPhase === 'asking_doubt') && (
+          <div className="mt-4 p-5 rounded-2xl bg-surface-2 border border-border animate-in">
+            <div className="flex items-center gap-2 mb-3">
+              <GraduationCap size={18} className="text-accent" />
+              <span className="font-semibold text-text-primary text-sm">Explicação da IA</span>
+            </div>
+            {loadingExplanation ? (
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+              </div>
+            ) : (
+              <p className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap">
+                {currentExplanation}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Doubt panel */}
+        {questionPhase === 'asking_doubt' && (
+          <div className="mt-4 p-5 rounded-2xl bg-surface border border-border animate-in">
+            <div className="flex items-center gap-2 mb-4">
+              <MessageCircle size={18} className="text-accent" />
+              <span className="font-semibold text-text-primary text-sm">Tire sua dúvida com a IA</span>
+            </div>
+
+            {doubtHistory.length > 0 && (
+              <div className="space-y-3 mb-4 max-h-64 overflow-y-auto">
+                {doubtHistory.map((msg, i) => (
+                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[80%] px-3 py-2 rounded-xl text-sm ${
+                      msg.role === 'user'
+                        ? 'bg-accent-soft text-text-primary'
+                        : 'bg-surface-3 text-text-secondary'
+                    }`}>
+                      {msg.content}
+                    </div>
+                  </div>
+                ))}
+                {loadingDoubt && (
+                  <div className="flex justify-start">
+                    <div className="bg-surface-3 rounded-xl px-3 py-2">
+                      <Skeleton className="h-3 w-32" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <Textarea
+              value={currentDoubt}
+              onChange={e => setCurrentDoubt(e.target.value)}
+              placeholder="Pergunte sobre esta questão ou peça mais detalhes..."
+              rows={3}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSendDoubt();
+              }}
+            />
+            <p className="text-2xs text-text-dim mt-1">Ctrl+Enter para enviar</p>
+
+            <div className="flex gap-2 mt-3">
+              <Button
+                onClick={handleSendDoubt}
+                loading={loadingDoubt}
+                disabled={!currentDoubt.trim()}
+                size="sm"
+              >
+                Enviar
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setQuestionPhase('explaining')}
+              >
+                Voltar para explicação
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Nav */}
@@ -669,29 +950,59 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
         <Button
           variant="ghost"
           icon={ChevronLeft}
-          onClick={() => setCurrentQ((q) => q - 1)}
-          disabled={currentQ === 0}
+          onClick={() => setCurrentQ(q => q - 1)}
+          disabled={currentQ === 0 || questionPhase !== 'answering'}
         >
           Anterior
         </Button>
-        {isLast ? (
-          <Button
-            onClick={submitEvaluation}
-            loading={evaluating}
-            disabled={!allAnswered}
-            size="lg"
-          >
-            {evaluating ? 'Avaliando...' : 'Finalizar avaliação'}
-          </Button>
-        ) : (
-          <Button
-            iconRight={ChevronRight}
-            onClick={() => setCurrentQ((q) => q + 1)}
-            disabled={!canNext}
-          >
-            Próxima
-          </Button>
-        )}
+
+        <div className="flex gap-2">
+          {questionPhase === 'answering' && (
+            explainAfterAnswer ? (
+              <Button
+                onClick={handleConfirmAnswer}
+                disabled={!canNext}
+                size="lg"
+              >
+                Confirmar resposta
+              </Button>
+            ) : (
+              isLast ? (
+                <Button onClick={submitEvaluation} loading={evaluating} disabled={!allAnswered} size="lg">
+                  {evaluating ? 'Avaliando...' : 'Finalizar avaliação'}
+                </Button>
+              ) : (
+                <Button iconRight={ChevronRight} onClick={goToNextQuestion} disabled={!canNext}>
+                  Próxima
+                </Button>
+              )
+            )
+          )}
+
+          {(questionPhase === 'explaining' || questionPhase === 'asking_doubt') && (
+            <>
+              {questionPhase === 'explaining' && (
+                <Button
+                  variant="secondary"
+                  icon={MessageCircle}
+                  onClick={() => setQuestionPhase('asking_doubt')}
+                  size="sm"
+                >
+                  Tirar dúvida
+                </Button>
+              )}
+              {isLast ? (
+                <Button onClick={submitEvaluation} loading={evaluating} disabled={!allAnswered} size="lg">
+                  {evaluating ? 'Avaliando...' : 'Finalizar avaliação'}
+                </Button>
+              ) : (
+                <Button iconRight={ChevronRight} onClick={goToNextQuestion}>
+                  Próxima questão
+                </Button>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

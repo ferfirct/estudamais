@@ -1,5 +1,5 @@
 // Dashboard — KPIs, evolução, temas, histórico com busca, oportunidades de melhora.
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   LineChart,
   Line,
@@ -31,7 +31,8 @@ import {
   GraduationCap,
   CalendarClock,
 } from 'lucide-react';
-import { Button, Card, Badge, StatCard, EmptyState, IconButton, Input } from '../ui.jsx';
+import { Button, Card, Badge, StatCard, EmptyState, IconButton, Input, Skeleton } from '../ui.jsx';
+import { quizApi } from '../api';
 import {
   formatMinutes,
   formatRelative,
@@ -52,6 +53,9 @@ export default function DashboardView({
 }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all'); // all | critical | good
+  const [wrongQuestions, setWrongQuestions] = useState([]);
+  const [loadingWrong, setLoadingWrong] = useState(false);
+  const [wrongTab, setWrongTab] = useState(false);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -68,6 +72,24 @@ export default function DashboardView({
 
   const evolutionData = useMemo(() => buildEvolutionSeries(sessions), [sessions]);
   const reviewsDue = useMemo(() => getReviewsDue(sessions), [sessions]);
+
+  useEffect(() => {
+    setLoadingWrong(true);
+    quizApi.listWrongQuestions()
+      .then(data => setWrongQuestions(data))
+      .catch(() => {})
+      .finally(() => setLoadingWrong(false));
+  }, []);
+
+  const handleMarkRetried = async (id) => {
+    await quizApi.markRetried(id);
+    setWrongQuestions(prev => prev.filter(w => w.id !== id));
+  };
+
+  const handleDeleteWrong = async (id) => {
+    await quizApi.deleteWrongQuestion(id);
+    setWrongQuestions(prev => prev.filter(w => w.id !== id));
+  };
 
   // Empty state
   if (sessions.length === 0) {
@@ -349,6 +371,38 @@ export default function DashboardView({
         </Card>
       )}
 
+      {/* Tab toggle */}
+      <div className="flex gap-2 mb-6">
+        <button
+          onClick={() => setWrongTab(false)}
+          className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${
+            !wrongTab
+              ? 'bg-accent-soft border-accent-border text-accent'
+              : 'bg-surface-2 border-border text-text-muted hover:text-text-secondary'
+          }`}
+        >
+          Histórico completo
+        </button>
+        <button
+          onClick={() => setWrongTab(true)}
+          className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-all flex items-center gap-2 ${
+            wrongTab
+              ? 'bg-danger-soft border-danger/40 text-danger'
+              : 'bg-surface-2 border-border text-text-muted hover:text-text-secondary'
+          }`}
+        >
+          <AlertTriangle size={14} />
+          Para refazer
+          {wrongQuestions.length > 0 && (
+            <span className="text-2xs font-mono font-bold bg-danger text-white rounded-full px-1.5 min-w-[18px] text-center">
+              {wrongQuestions.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {!wrongTab && (
+        <>
       {/* Histórico */}
       <div className="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
         <h3 className="text-xl font-display font-bold text-text-primary">
@@ -441,6 +495,98 @@ export default function DashboardView({
           </p>
         )}
       </div>
+        </>
+      )}
+
+      {wrongTab && (
+        <div className="space-y-3">
+          {loadingWrong && (
+            <div className="space-y-2">
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-16 w-full" />
+            </div>
+          )}
+          {!loadingWrong && wrongQuestions.length === 0 && (
+            <div className="text-center py-12 text-text-muted text-sm">
+              Nenhuma questão para refazer. Continue estudando!
+            </div>
+          )}
+          {wrongQuestions.map((wq) => (
+            <Card key={wq.id} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <Badge variant="danger">
+                      {wq.quizType === 'civil_service' ? 'Concurso' : wq.quizType === 'vestibular' ? 'Vestibular' : 'Estudo livre'}
+                    </Badge>
+                    <Badge variant="default">
+                      {wq.difficulty === 'easy' ? 'Fácil' : wq.difficulty === 'medium' ? 'Médio' : 'Difícil'}
+                    </Badge>
+                    <span className="text-xs text-text-muted">{wq.theme}</span>
+                  </div>
+                  <p className="text-sm text-text-primary font-medium leading-snug mb-1">
+                    {wq.question.question}
+                  </p>
+                  {wq.question.type === 'multiple_choice' && wq.question.options && (
+                    <div className="grid grid-cols-1 gap-1 mt-2">
+                      {wq.question.options.map((opt, i) => {
+                        const letter = String.fromCharCode(65 + i);
+                        const wasSelected = wq.userAnswer === letter;
+                        return (
+                          <div
+                            key={i}
+                            className={`text-xs px-3 py-1.5 rounded-lg border ${
+                              wasSelected
+                                ? 'bg-danger-soft border-danger/40 text-danger'
+                                : 'bg-surface-2 border-border text-text-muted'
+                            }`}
+                          >
+                            {letter}) {opt}
+                            {wasSelected && <span className="ml-2 font-semibold">(sua resposta)</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {wq.question.type === 'summation' && wq.question.summationItems && (
+                    <div className="mt-2 space-y-1">
+                      {wq.question.summationItems.map(item => (
+                        <div key={item.value} className="text-xs text-text-muted flex gap-2">
+                          <span className="font-mono text-text-dim w-6 shrink-0">{String(item.value).padStart(2, '0')}</span>
+                          <span>{item.statement}</span>
+                        </div>
+                      ))}
+                      <p className="text-xs text-danger mt-1">Sua resposta: {wq.userAnswer}</p>
+                    </div>
+                  )}
+                  {wq.question.type === 'open_ended' && (
+                    <p className="text-xs text-danger mt-1 italic">
+                      Sua resposta: "{wq.userAnswer}"
+                    </p>
+                  )}
+                  <p className="text-2xs text-text-dim mt-2">{formatRelative(wq.savedAt)}</p>
+                </div>
+                <div className="flex flex-col gap-2 shrink-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleMarkRetried(wq.id)}
+                  >
+                    Marquei como refeita
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDeleteWrong(wq.id)}
+                  >
+                    Remover
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
