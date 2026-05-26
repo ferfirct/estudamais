@@ -25,7 +25,7 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/src/services/schema.sql ./dist/services/schema.sql
+COPY --from=builder /app/src/shared/infra/schema.sql ./dist/shared/infra/schema.sql
 
 
 
@@ -33,7 +33,7 @@ ENV NODE_ENV=production
 ENV PORT=3333
 ENV DB_PATH=/app/data/estuda.db
 
-RUN chown -R appuser:appgroup /app
+RUN mkdir -p /app/data && chown -R appuser:appgroup /app
 USER appuser
 
 EXPOSE 3333
