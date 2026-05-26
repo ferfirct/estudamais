@@ -1,0 +1,7 @@
+﻿node_modules/
+dist/
+.env
+backend/deploy.ps1
+backend/backend.zip
+backend/deploy.zip
+profiles.json
