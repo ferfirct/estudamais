@@ -5,6 +5,7 @@ import QuizView from './views/QuizView.jsx';
 import DashboardView from './views/DashboardView.jsx';
 import AuthView from './views/AuthView.jsx';
 import SettingsView from './views/SettingsView.jsx';
+import AdminView from './views/AdminView.jsx';
 import PracticeView from './views/PracticeView.jsx';
 import { Toaster } from './ui.jsx';
 import { useTheme } from './hooks/useTheme.js';
@@ -70,6 +71,13 @@ export default function App() {
     window.addEventListener('auth:logout', onLogout);
     return () => window.removeEventListener('auth:logout', onLogout);
   }, []);
+
+  // Prevent non-admins from accessing admin view
+  useEffect(() => {
+    if (view === 'admin' && user?.role !== 'admin') {
+      setView('session');
+    }
+  }, [view, user]);
 
   const refreshSessions = useCallback(async () => {
     try {
@@ -202,6 +210,9 @@ export default function App() {
     { key: 'practice', label: 'Praticar', icon: Dumbbell },
     { key: 'dashboard', label: 'Métricas', icon: BarChart3, badge: sessions.length },
   ];
+  if (user?.role === 'admin') {
+    navItems.push({ key: 'admin', label: 'Admin', icon: Settings });
+  }
 
   const streakAtRisk = isStreakAtRisk(streak);
 
@@ -308,6 +319,7 @@ export default function App() {
             onStartWrongPractice={handleStartWrongPractice}
           />
         )}
+        {view === 'admin' && <AdminView user={user} />}
         {view === 'settings' && (
           <SettingsView
             user={user}
