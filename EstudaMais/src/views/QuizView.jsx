@@ -1,5 +1,5 @@
 // Tela do quiz — loading polido, questões navegáveis, resultado com gap analysis.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Brain,
   ChevronRight,
@@ -31,18 +31,21 @@ import {
   checkNewRecord,
   loadSessions,
 } from '../lib.js';
-import { sessionsApi, quizApi, ApiError } from '../api';
+import { sessionsApi, quizApi, notesApi, ApiError } from '../api';
 
 export default function QuizView({ sessionData, onComplete, onSkip, sessions = [] }) {
   const {
     topic,
     duration,
     quizType = 'free',
+    quizSubtype,
     explainAfterAnswer = true,
     questionCount = 5,
     questionDistribution,
     difficulty = 'medium',
     learningMode = false,
+    simulatedMode = false,
+    timePerQuestion = 60,
   } = sessionData;
 
   const [questions, setQuestions] = useState([]);
@@ -64,6 +67,10 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
   const [currentDoubt, setCurrentDoubt] = useState('');
   const [loadingDoubt, setLoadingDoubt] = useState(false);
   const [summationChecks, setSummationChecks] = useState({});
+  const [noteOpen, setNoteOpen] = useState({});
+  const [noteContent, setNoteContent] = useState({});
+  const [noteSaving, setNoteSaving] = useState({});
+  const [timeLeft, setTimeLeft] = useState(timePerQuestion);
 
   const backendSessionIdRef = useRef(null);
   const backendQuestionsRef = useRef([]);
@@ -85,7 +92,24 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
     setCurrentExplanation('');
     setDoubtHistory([]);
     setCurrentDoubt('');
-  }, [currentQ]);
+    setTimeLeft(timePerQuestion);
+  }, [currentQ, timePerQuestion]);
+
+  useEffect(() => {
+    if (!simulatedMode || loading || result || questionPhase !== 'answering') return;
+    if (timeLeft <= 0) {
+      const isLastQ = currentQ === questions.length - 1;
+      if (isLastQ) {
+        submitEvaluation();
+      } else {
+        setCurrentQ(q => q + 1);
+      }
+      return;
+    }
+    const id = setInterval(() => setTimeLeft(t => t - 1), 1000);
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [simulatedMode, loading, result, questionPhase, timeLeft, currentQ, questions.length]);
 
   useEffect(() => {
     const q = questions[currentQ];
@@ -135,6 +159,12 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
         theme: topic,
         durationMinutes: Math.max(1, Math.round(duration / 60)),
         previousScores: previousScores.length > 0 ? previousScores : undefined,
+        questionCount,
+        questionDistribution,
+        difficulty,
+        learningMode,
+        quizType,
+        quizSubtype,
       });
       backendQuestionsRef.current = apiQs;
       setQuestions(normalizeQuestions(apiQs));
@@ -470,9 +500,14 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
       <div className="animate-in max-w-3xl mx-auto">
         {/* Hero score */}
         <div className="text-center mb-10">
-          <Badge variant={score >= 7 ? 'success' : score >= 5 ? 'warning' : 'danger'} icon={Trophy}>
-            Resultado da avaliação
-          </Badge>
+          <div className="flex items-center justify-center gap-2 flex-wrap">
+            <Badge variant={score >= 7 ? 'success' : score >= 5 ? 'warning' : 'danger'} icon={Trophy}>
+              Resultado da avaliação
+            </Badge>
+            {simulatedMode && (
+              <Badge variant="info" icon={Timer}>Modo Simulado</Badge>
+            )}
+          </div>
           <div className="relative inline-flex flex-col items-center mt-5">
             <div
               className={`relative w-32 h-32 rounded-4xl ${scoreBgCls} border-2 flex items-center justify-center shadow-elevated`}
@@ -727,6 +762,28 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
         ))}
       </div>
 
+      {/* Timer Modo Simulado */}
+      {simulatedMode && !result && questionPhase === 'answering' && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-2xs text-text-muted">Modo Simulado</span>
+            <span className={`text-xs font-mono font-bold tabular ${
+              timeLeft / timePerQuestion > 0.5 ? 'text-accent' : timeLeft / timePerQuestion > 0.25 ? 'text-warning' : 'text-danger'
+            }`}>
+              {timeLeft}s
+            </span>
+          </div>
+          <div className="h-1 bg-surface-3 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-1000 ${
+                timeLeft / timePerQuestion > 0.5 ? 'bg-accent' : timeLeft / timePerQuestion > 0.25 ? 'bg-warning' : 'bg-danger'
+              }`}
+              style={{ width: `${(timeLeft / timePerQuestion) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Learning hint (before question card) */}
       {q.learningHint && (
         <div className="p-4 rounded-2xl bg-info-soft border border-info/30 mb-4 flex items-start gap-3 animate-in">
@@ -860,6 +917,65 @@ export default function QuizView({ sessionData, onComplete, onSkip, sessions = [
             aria-label={`Resposta da questão ${currentQ + 1}`}
           />
         )}
+
+        {/* Botão Anotar */}
+        <div className="mt-4">
+          {!noteOpen[currentQ] ? (
+            <button
+              onClick={() => setNoteOpen(prev => ({ ...prev, [currentQ]: true }))}
+              className="text-xs text-text-muted hover:text-accent transition-colors flex items-center gap-1"
+            >
+              📝 Anotar sobre esta questão
+            </button>
+          ) : (
+            <div className="p-4 rounded-2xl bg-surface-2 border border-border animate-in space-y-2">
+              <Textarea
+                value={noteContent[currentQ] || ''}
+                onChange={e => setNoteContent(prev => ({ ...prev, [currentQ]: e.target.value }))}
+                placeholder="Sua anotação sobre esta questão..."
+                rows={3}
+                autoFocus
+              />
+              <div className="flex gap-2 justify-end">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setNoteOpen(prev => ({ ...prev, [currentQ]: false }))}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  size="sm"
+                  loading={noteSaving[currentQ]}
+                  disabled={!noteContent[currentQ]?.trim()}
+                  onClick={async () => {
+                    const content = noteContent[currentQ]?.trim();
+                    if (!content) return;
+                    setNoteSaving(prev => ({ ...prev, [currentQ]: true }));
+                    try {
+                      const bq = backendQuestionsRef.current[currentQ];
+                      await notesApi.createNote({
+                        content,
+                        questionId: bq?.id ?? q.id,
+                        theme: topic,
+                        sessionId: backendSessionIdRef.current ?? undefined,
+                      });
+                      setNoteOpen(prev => ({ ...prev, [currentQ]: false }));
+                      setNoteContent(prev => ({ ...prev, [currentQ]: '' }));
+                      toast({ title: 'Anotação salva', variant: 'success' });
+                    } catch {
+                      toast({ title: 'Erro ao salvar anotação', variant: 'error' });
+                    } finally {
+                      setNoteSaving(prev => ({ ...prev, [currentQ]: false }));
+                    }
+                  }}
+                >
+                  Salvar
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Explanation card */}
         {(questionPhase === 'explaining' || questionPhase === 'asking_doubt') && (

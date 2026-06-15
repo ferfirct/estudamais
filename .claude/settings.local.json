@@ -6,7 +6,30 @@
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\joaov\\\\OneDrive\\\\Documentos\\\\estuda+project\" -Force)",
       "Bash(Select-Object FullName, PSIsContainer)",
       "Bash(Format-Table -AutoSize)",
-      "Bash(del /f \"src\\\\services\\\\database.ts\" \"src\\\\services\\\\aiService.ts\" \"src\\\\routes\\\\auth.ts\" \"src\\\\routes\\\\sessions.ts\" \"src\\\\routes\\\\quiz.ts\" \"src\\\\routes\\\\dashboard.ts\" \"src\\\\routes\\\\streak.ts\" \"src\\\\routes\\\\records.ts\" \"src\\\\routes\\\\reviews.ts\" \"src\\\\routes\\\\summary.ts\" \"src\\\\routes\\\\settings.ts\" \"src\\\\routes\\\\sessions_new.ts\" \"src\\\\middleware\\\\auth.ts\" \"src\\\\middleware\\\\errorHandler.ts\" \"src\\\\types\\\\index.ts\")"
+      "Bash(del /f \"src\\\\services\\\\database.ts\" \"src\\\\services\\\\aiService.ts\" \"src\\\\routes\\\\auth.ts\" \"src\\\\routes\\\\sessions.ts\" \"src\\\\routes\\\\quiz.ts\" \"src\\\\routes\\\\dashboard.ts\" \"src\\\\routes\\\\streak.ts\" \"src\\\\routes\\\\records.ts\" \"src\\\\routes\\\\reviews.ts\" \"src\\\\routes\\\\summary.ts\" \"src\\\\routes\\\\settings.ts\" \"src\\\\routes\\\\sessions_new.ts\" \"src\\\\middleware\\\\auth.ts\" \"src\\\\middleware\\\\errorHandler.ts\" \"src\\\\types\\\\index.ts\")",
+      "Bash(npx tsc *)",
+      "Bash(npx vite *)",
+      "Bash(mkdir -p estudamais-ms-sessions/src/shared/types estudamais-ms-sessions/src/shared/middleware estudamais-ms-sessions/src/shared/infra estudamais-ms-sessions/src/shared/config estudamais-ms-sessions/src/features/sessions)",
+      "Bash(mkdir -p estudamais-ms-users/src/shared/types estudamais-ms-users/src/shared/middleware estudamais-ms-users/src/shared/infra estudamais-ms-users/src/shared/config estudamais-ms-users/src/features/users estudamais-ms-users/src/features/auth)",
+      "Bash(mkdir -p estudamais-bff/src/shared/types estudamais-bff/src/shared/middleware estudamais-bff/src/shared/clients estudamais-bff/src/shared/config estudamais-bff/src/features/aggregated estudamais-bff/src/functions/aggregated-data)",
+      "Bash(echo \"started ms-sessions pid $!\")",
+      "Bash(echo \"started ms-users pid $!\")",
+      "Bash(echo \"started bff pid $!\")",
+      "Read(//tmp/**)",
+      "Bash(curl *)",
+      "Bash(func --version)",
+      "Bash(netstat -ano)",
+      "Bash(az --version)",
+      "Bash(az account *)",
+      "Bash(func azure *)",
+      "Bash(cat .env)",
+      "Bash(cat .env.example)",
+      "Bash(pkill -f \"tsx watch src/server.ts\")",
+      "Bash(docker info *)",
+      "Bash(docker build *)",
+      "Bash(docker push *)",
+      "Bash(git status *)",
+      "Bash(git add *)"
     ]
   }
 }

@@ -1,9 +1,9 @@
 import { request } from './client.js';
 
-export function generateQuiz({ sessionId, theme, durationMinutes, previousScores }) {
+export function generateQuiz({ sessionId, theme, durationMinutes, previousScores, questionCount, questionDistribution, difficulty, learningMode, quizType, quizSubtype }) {
   return request('/api/quiz/generate', {
     method: 'POST',
-    body: { sessionId, theme, durationMinutes, previousScores },
+    body: { sessionId, theme, durationMinutes, previousScores, questionCount, questionDistribution, difficulty, learningMode, quizType, quizSubtype },
   });
 }
 

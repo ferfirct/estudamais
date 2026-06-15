@@ -1,7 +1,7 @@
 import { request } from './client.js';
 
 export function listUsers() {
-  return request('/api/auth/users');
+  return request('/api/auth/admin/users');
 }
 
 export function createUser({ name, email, password, role = 'user' }) {
@@ -12,5 +12,5 @@ export function createUser({ name, email, password, role = 'user' }) {
 }
 
 export function deleteUser(id) {
-  return request(`/api/auth/users/${id}`, { method: 'DELETE' });
+  return request(`/api/auth/admin/users/${id}`, { method: 'DELETE' });
 }

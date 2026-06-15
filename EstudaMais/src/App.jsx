@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { GraduationCap, Timer, BarChart3, Flame, Settings, Dumbbell } from 'lucide-react';
+import { GraduationCap, Timer, BarChart3, Flame, Settings, Dumbbell, NotebookPen, Layers } from 'lucide-react';
 import SessionView from './views/SessionView.jsx';
 import QuizView from './views/QuizView.jsx';
 import DashboardView from './views/DashboardView.jsx';
@@ -7,6 +7,8 @@ import AuthView from './views/AuthView.jsx';
 import SettingsView from './views/SettingsView.jsx';
 import AdminView from './views/AdminView.jsx';
 import PracticeView from './views/PracticeView.jsx';
+import NotesView from './views/NotesView.jsx';
+import FlashcardsView from './views/FlashcardsView.jsx';
 import { Toaster } from './ui.jsx';
 import { useTheme } from './hooks/useTheme.js';
 import { getMe } from './api/auth.js';
@@ -19,6 +21,7 @@ import {
   isStreakAtRisk,
   scheduleStreakCheck,
   requestNotificationPermission,
+  getReviewsDue,
 } from './lib.js';
 
 function mapForInsights(s) {
@@ -88,6 +91,11 @@ export default function App() {
 
   const insights = useMemo(
     () => computeInsights(sessions.map(mapForInsights)),
+    [sessions]
+  );
+
+  const reviewsDue = useMemo(
+    () => getReviewsDue(sessions.map(mapForInsights)),
     [sessions]
   );
 
@@ -209,6 +217,8 @@ export default function App() {
     { key: 'session', label: 'Estudar', icon: Timer },
     { key: 'practice', label: 'Praticar', icon: Dumbbell },
     { key: 'dashboard', label: 'Métricas', icon: BarChart3, badge: sessions.length },
+    { key: 'flashcards', label: 'Flashcards', icon: Layers },
+    { key: 'notes', label: 'Anotações', icon: NotebookPen },
   ];
   if (user?.role === 'admin') {
     navItems.push({ key: 'admin', label: 'Admin', icon: Settings });
@@ -294,6 +304,7 @@ export default function App() {
             insights={insights}
             dailyGoal={dailyGoal}
             recentThemes={recentThemes}
+            reviewsDue={reviewsDue}
           />
         )}
         {view === 'quiz' && pendingSession && (
@@ -311,6 +322,8 @@ export default function App() {
             onClearHistory={handleClearHistory}
             onStartSession={handleStartSession}
             onEditGoal={setDailyGoal}
+            onStartFlashcards={() => setView('flashcards')}
+            onViewNotes={() => setView('notes')}
           />
         )}
         {view === 'practice' && (
@@ -319,12 +332,15 @@ export default function App() {
             onStartWrongPractice={handleStartWrongPractice}
           />
         )}
+        {view === 'flashcards' && <FlashcardsView />}
+        {view === 'notes' && <NotesView user={user} />}
         {view === 'admin' && <AdminView user={user} />}
         {view === 'settings' && (
           <SettingsView
             user={user}
             onLogout={handleLogout}
             onThemeChange={setTheme}
+            onUserUpdate={setUser}
           />
         )}
       </main>

@@ -33,6 +33,7 @@ export const generateQuizSchema = z.object({
   difficulty: z.enum(['easy', 'medium', 'hard']).default('medium'),
   learningMode: z.boolean().default(false),
   quizType: z.enum(['free', 'civil_service', 'vestibular']).default('free'),
+  quizSubtype: z.string().optional(),
 });
 
 export const evaluateQuizSchema = z.object({
