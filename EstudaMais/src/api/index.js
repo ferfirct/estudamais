@@ -8,6 +8,7 @@ export * as summaryApi from './summary.js';
 export * as authApi from './auth.js';
 export * as adminApi from './admin.js';
 export * as settingsApi from './settings.js';
+export * as aggregatedApi from './aggregated.js';
 export * as notesApi from './notes.js';
 export * as flashcardsApi from './flashcards.js';
 export * as goalsApi from './goals.js';

@@ -109,3 +109,13 @@ Frontend em `http://localhost:5173`, backend em `http://localhost:3333`.
 
 A `GROQ_API_KEY` vive **apenas** no backend. O frontend nunca recebe ou
 embute a chave — toda geração/avaliação de quiz é proxied pelo Express.
+
+## Equipe
+
+Fernando Chociai  
+Gabriel Coltre  
+João Marcelo  
+João Vitor Franzedo Carmo  
+Leander Hallu  
+
+PUCPR — Projeto PJBL 2026

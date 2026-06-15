@@ -14,6 +14,7 @@ import { useTheme } from './hooks/useTheme.js';
 import { getMe } from './api/auth.js';
 import { getSettings } from './api/settings.js';
 import { listSessions } from './api/sessions.js';
+import { getAggregatedData } from './api/aggregated.js';
 import { setToken } from './api/client.js';
 import {
   computeInsights,
@@ -41,6 +42,7 @@ export default function App() {
   const [pendingSession, setPendingSession] = useState(null);
   const [dailyGoal, setDailyGoal] = useState(60);
   const [streak, setStreak] = useState({ currentStreak: 0, longestStreak: 0 });
+  const [aggregatedData, setAggregatedData] = useState(null);
 
   const { theme, setTheme } = useTheme('dark');
 
@@ -64,6 +66,14 @@ export default function App() {
       .catch(() => { /* not authenticated */ })
       .finally(() => setAuthReady(true));
   }, []);
+
+  // Fetch aggregated data from BFF when user logs in
+  useEffect(() => {
+    if (!user?.id) return;
+    getAggregatedData(user.id)
+      .then(setAggregatedData)
+      .catch(() => { /* BFF unavailable — graceful degradation */ });
+  }, [user?.id]);
 
   // Listen for 401 logout event
   useEffect(() => {
@@ -324,6 +334,7 @@ export default function App() {
             onEditGoal={setDailyGoal}
             onStartFlashcards={() => setView('flashcards')}
             onViewNotes={() => setView('notes')}
+            aggregatedData={aggregatedData}
           />
         )}
         {view === 'practice' && (
