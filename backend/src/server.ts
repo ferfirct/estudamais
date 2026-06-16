@@ -12,6 +12,9 @@ import streakRouter from './features/streak/streak.routes.js';
 import recordsRouter from './features/records/records.routes.js';
 import reviewsRouter from './features/reviews/reviews.routes.js';
 import summaryRouter from './features/summary/summary.routes.js';
+import notesRouter from './features/notes/notes.routes.js';
+import flashcardsRouter from './features/flashcards/flashcards.routes.js';
+import goalsRouter from './features/goals/goals.routes.js';
 
 const app = express();
 const port = Number(process.env.PORT ?? 3333);
@@ -47,6 +50,10 @@ app.use('/api/streak', streakRouter);
 app.use('/api/records', recordsRouter);
 app.use('/api/reviews', reviewsRouter);
 app.use('/api/summary', summaryRouter);
+app.use('/api/notes', notesRouter);
+app.use('/api/flashcards/generate', quizLimiter);
+app.use('/api/flashcards', flashcardsRouter);
+app.use('/api/goals', goalsRouter);
 
 app.use(errorHandler);
 

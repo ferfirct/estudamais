@@ -4,6 +4,7 @@ import { HttpError } from './errorHandler.js';
 
 export interface AuthRequest extends Request {
   userId?: string;
+  userRole?: 'user' | 'admin';
 }
 
 export function requireAuth(req: AuthRequest, _res: Response, next: NextFunction) {
@@ -13,8 +14,9 @@ export function requireAuth(req: AuthRequest, _res: Response, next: NextFunction
   }
   const token = header.slice(7);
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET!) as { sub: string };
+    const payload = jwt.verify(token, process.env.JWT_SECRET!) as { sub: string; role?: string };
     req.userId = payload.sub;
+    req.userRole = (payload.role as 'user' | 'admin') ?? 'user';
     next();
   } catch {
     throw new HttpError(401, 'Token inválido ou expirado.');

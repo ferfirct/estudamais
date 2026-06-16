@@ -40,6 +40,7 @@ router.post('/generate', async (req: AuthRequest, res: Response, next: NextFunct
       difficulty,
       learningMode,
       quizType,
+      quizSubtype,
     } = generateQuizSchema.parse(req.body);
     res.json(
       await generateQuiz.execute(req.userId!, sessionId, theme, durationMinutes, previousScores, {
@@ -48,6 +49,7 @@ router.post('/generate', async (req: AuthRequest, res: Response, next: NextFunct
         difficulty,
         learningMode,
         quizType,
+        quizSubtype,
       }),
     );
   } catch (err) {

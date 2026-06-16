@@ -1,7 +1,6 @@
 import type { QuizQuestion } from './quiz.types.js';
 import { HttpError } from '../../shared/middleware/errorHandler.js';
-
-const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
+import { callGroq } from '../../shared/infra/groq-client.js';
 
 export interface GenerateOptions {
   questionCount?: number;
@@ -9,6 +8,7 @@ export interface GenerateOptions {
   difficulty?: 'easy' | 'medium' | 'hard';
   learningMode?: boolean;
   quizType?: 'free' | 'civil_service' | 'vestibular';
+  quizSubtype?: string;
 }
 
 export interface IAiService {
@@ -53,11 +53,17 @@ function determineDifficulty(scores: number[]): string {
   return 'avançado, inclua casos-limite e pegadinhas conceituais';
 }
 
-function buildRolePart(quizType?: string): string {
+function buildRolePart(quizType?: string, quizSubtype?: string): string {
   if (quizType === 'civil_service') {
+    if (quizSubtype) {
+      return `Você é um especialista em concursos públicos brasileiros. Gere questões NO ESTILO E FORMATO EXATO da banca/concurso: ${quizSubtype}. Inspire-se em questões reais desta banca e indique no campo hint a referência (ex: 'Inspirado em ${quizSubtype} 2023').`;
+    }
     return "Você é um especialista em concursos públicos brasileiros. Gere questões no estilo das bancas CESPE/CEBRASPE, FCC, FGV e VUNESP sobre o tema. Inspire-se em questões reais e indique no campo hint a banca de inspiração (ex: 'Inspirado em CESPE 2022').";
   }
   if (quizType === 'vestibular') {
+    if (quizSubtype) {
+      return `Você é um especialista em vestibulares brasileiros. Gere questões NO ESTILO E FORMATO EXATO de: ${quizSubtype}. Inspire-se em questões reais desta prova e indique no campo hint a referência (ex: 'Inspirado em ${quizSubtype} 2023').`;
+    }
     return "Você é um especialista em vestibulares brasileiros (ENEM, FUVEST, UNICAMP, UNESP). Gere questões no estilo dessas provas sobre o tema. Inspire-se em questões reais e indique no campo hint a prova de inspiração (ex: 'Inspirado em ENEM 2023').";
   }
   return 'Você é um tutor acadêmico brasileiro.';
@@ -110,30 +116,13 @@ export class GroqAiService implements IAiService {
   private readonly model = process.env.GROQ_MODEL ?? 'llama-3.3-70b-versatile';
 
   private async chat(messages: ChatMessage[], maxTokens = 1500): Promise<string> {
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey) throw new HttpError(500, 'GROQ_API_KEY não configurada no backend.');
-
-    const response = await fetch(GROQ_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: this.model,
-        messages,
-        max_tokens: maxTokens,
-        temperature: 0.7,
-        response_format: { type: 'json_object' },
-      }),
+    return callGroq({
+      model: this.model,
+      messages,
+      max_tokens: maxTokens,
+      temperature: 0.7,
+      response_format: { type: 'json_object' },
     });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new HttpError(502, `Falha na API Groq (${response.status}): ${text}`);
-    }
-
-    const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) throw new HttpError(502, 'Resposta da IA vazia.');
-    return content;
   }
 
   async generateQuiz(
@@ -142,7 +131,7 @@ export class GroqAiService implements IAiService {
     previousScores?: number[],
     options: GenerateOptions = {},
   ): Promise<QuizQuestion[]> {
-    const { questionCount = 5, questionDistribution, difficulty, learningMode, quizType } = options;
+    const { questionCount = 5, questionDistribution, difficulty, learningMode, quizType, quizSubtype } = options;
     const dist = questionDistribution;
     const totalQ = questionCount;
     const mcCount = dist?.multipleChoice ?? totalQ;
@@ -162,7 +151,7 @@ Conte antes de responder: ${mcCount} multiple_choice + ${sumCount} summation + $
 
     const parts: string[] = [
       criticalInstruction,
-      buildRolePart(quizType),
+      buildRolePart(quizType, quizSubtype),
       buildDifficultyPart(difficulty, previousScores),
       buildDistributionPart(questionCount, questionDistribution),
     ];

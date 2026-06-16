@@ -11,7 +11,7 @@
 | *Fernando Chociai* | 
 | *Gabriel Coltre* | 
 | *João Marcelo* |
-| *João Franze* |
+| *João Vitor Franzedo Carmo* |
 | *Leander Hallu* |
 
 ---

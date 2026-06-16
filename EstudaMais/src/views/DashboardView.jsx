@@ -30,9 +30,14 @@ import {
   Award,
   GraduationCap,
   CalendarClock,
+  Layers,
+  NotebookPen,
+  Pencil,
+  Check,
+  X,
 } from 'lucide-react';
 import { Button, Card, Badge, StatCard, EmptyState, IconButton, Input, Skeleton } from '../ui.jsx';
-import { quizApi } from '../api';
+import { quizApi, flashcardsApi, notesApi, goalsApi } from '../api';
 import {
   formatMinutes,
   formatRelative,
@@ -50,12 +55,19 @@ export default function DashboardView({
   onClearHistory,
   onStartSession,
   onEditGoal,
+  onStartFlashcards,
+  onViewNotes,
 }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all'); // all | critical | good
   const [wrongQuestions, setWrongQuestions] = useState([]);
   const [loadingWrong, setLoadingWrong] = useState(false);
   const [wrongTab, setWrongTab] = useState(false);
+  const [dueFlashcards, setDueFlashcards] = useState([]);
+  const [recentNotes, setRecentNotes] = useState([]);
+  const [goals, setGoals] = useState([]);
+  const [editingGoal, setEditingGoal] = useState(null); // theme string
+  const [goalInput, setGoalInput] = useState('');
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -79,6 +91,9 @@ export default function DashboardView({
       .then(data => setWrongQuestions(data))
       .catch(() => {})
       .finally(() => setLoadingWrong(false));
+    flashcardsApi.listFlashcards({ dueOnly: true }).then(setDueFlashcards).catch(() => {});
+    notesApi.listNotes().then(data => setRecentNotes((data || []).slice(0, 3))).catch(() => {});
+    goalsApi.listGoals().then(setGoals).catch(() => {});
   }, []);
 
   const handleMarkRetried = async (id) => {
@@ -89,6 +104,29 @@ export default function DashboardView({
   const handleDeleteWrong = async (id) => {
     await quizApi.deleteWrongQuestion(id);
     setWrongQuestions(prev => prev.filter(w => w.id !== id));
+  };
+
+  const goalMap = Object.fromEntries(goals.map(g => [g.theme, g.targetScore]));
+
+  const handleSaveGoal = async (theme) => {
+    const val = parseFloat(goalInput);
+    if (isNaN(val) || val < 0 || val > 10) return;
+    try {
+      const updated = await goalsApi.upsertGoal(theme, val);
+      setGoals(prev => {
+        const without = prev.filter(g => g.theme !== theme);
+        return [...without, updated];
+      });
+    } catch { /* ignore */ }
+    setEditingGoal(null);
+  };
+
+  const handleDeleteGoal = async (theme) => {
+    try {
+      await goalsApi.deleteGoal(theme);
+      setGoals(prev => prev.filter(g => g.theme !== theme));
+    } catch { /* ignore */ }
+    setEditingGoal(null);
   };
 
   // Empty state
@@ -233,31 +271,82 @@ export default function DashboardView({
               Top temas
             </h3>
             <p className="text-xs text-text-muted mb-5">Por score médio</p>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {insights.themes
                 .filter((t) => t.avgScore != null)
                 .sort((a, b) => b.avgScore - a.avgScore)
                 .slice(0, 5)
-                .map((t) => (
-                  <div key={t.theme}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-sm text-text-secondary truncate pr-2">
-                        {t.theme}
-                      </span>
-                      <span
-                        className={`text-sm font-mono font-bold tabular ${scoreColor(t.avgScore)}`}
-                      >
-                        {t.avgScore}
-                      </span>
+                .map((t) => {
+                  const meta = goalMap[t.theme];
+                  const metaAlcancada = meta != null && t.avgScore >= meta;
+                  const isEditing = editingGoal === t.theme;
+                  return (
+                    <div key={t.theme}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-sm text-text-secondary truncate">
+                            {t.theme}
+                          </span>
+                          {!isEditing && (
+                            <button
+                              onClick={() => { setEditingGoal(t.theme); setGoalInput(meta != null ? String(meta) : ''); }}
+                              className="text-text-dim hover:text-accent transition-colors shrink-0"
+                              title="Definir meta"
+                            >
+                              <Pencil size={11} />
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {meta != null && metaAlcancada && !isEditing && (
+                            <span className="text-2xs font-semibold text-accent">✓ Meta</span>
+                          )}
+                          {meta != null && !metaAlcancada && !isEditing && (
+                            <span className="text-2xs text-warning font-mono">faltam {(meta - t.avgScore).toFixed(1)}pts</span>
+                          )}
+                          <span className={`text-sm font-mono font-bold tabular ${scoreColor(t.avgScore)}`}>
+                            {t.avgScore}
+                          </span>
+                        </div>
+                      </div>
+
+                      {isEditing ? (
+                        <div className="flex items-center gap-2 mb-1">
+                          <input
+                            type="number"
+                            min="0"
+                            max="10"
+                            step="0.5"
+                            value={goalInput}
+                            onChange={e => setGoalInput(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') handleSaveGoal(t.theme); if (e.key === 'Escape') setEditingGoal(null); }}
+                            autoFocus
+                            placeholder="0–10"
+                            className="w-20 bg-surface-2 border border-accent rounded-lg px-2 py-1 text-xs text-text-primary focus:outline-none"
+                          />
+                          <button onClick={() => handleSaveGoal(t.theme)} className="text-accent hover:text-accent-hover"><Check size={14} /></button>
+                          <button onClick={() => setEditingGoal(null)} className="text-text-dim hover:text-text-muted"><X size={14} /></button>
+                          {meta != null && (
+                            <button onClick={() => handleDeleteGoal(t.theme)} className="text-danger text-2xs hover:underline">remover</button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="relative h-1.5 bg-surface-3 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-accent to-info rounded-full transition-all"
+                            style={{ width: `${(t.avgScore / 10) * 100}%` }}
+                          />
+                          {meta != null && (
+                            <div
+                              className="absolute top-0 h-full w-0.5 bg-warning/80"
+                              style={{ left: `${(meta / 10) * 100}%` }}
+                            />
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <div className="h-1.5 bg-surface-3 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-accent to-info rounded-full transition-all"
-                        style={{ width: `${(t.avgScore / 10) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               {insights.themes.filter((t) => t.avgScore != null).length === 0 && (
                 <p className="text-sm text-text-muted text-center py-4">
                   Complete quizzes para ver o ranking
@@ -369,6 +458,77 @@ export default function DashboardView({
             ))}
           </div>
         </Card>
+      )}
+
+      {/* Flashcards para revisar + Anotações recentes */}
+      {(dueFlashcards.length > 0 || recentNotes.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          {/* Flashcards para revisar */}
+          {dueFlashcards.length > 0 && (
+            <Card className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-accent-soft border border-accent-border flex items-center justify-center">
+                    <Layers size={15} className="text-accent" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-display font-bold text-text-primary">Flashcards para revisar</h3>
+                    <p className="text-2xs text-text-muted">{dueFlashcards.length} card{dueFlashcards.length !== 1 ? 's' : ''} prontos</p>
+                  </div>
+                </div>
+                <Button size="sm" icon={Layers} onClick={onStartFlashcards}>Revisar</Button>
+              </div>
+              <div className="space-y-2">
+                {Object.entries(
+                  dueFlashcards.reduce((acc, f) => {
+                    acc[f.theme] = (acc[f.theme] || 0) + 1;
+                    return acc;
+                  }, {})
+                ).slice(0, 4).map(([theme, count]) => (
+                  <div key={theme} className="flex items-center justify-between px-3 py-2 bg-surface-2 rounded-xl">
+                    <span className="text-xs text-text-secondary truncate">{theme}</span>
+                    <Badge variant="accent" className="text-2xs shrink-0 ml-2">{count}</Badge>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {/* Anotações recentes */}
+          {recentNotes.length > 0 && (
+            <Card className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-accent-soft border border-accent-border flex items-center justify-center">
+                    <NotebookPen size={15} className="text-accent" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-display font-bold text-text-primary">Anotações recentes</h3>
+                    <p className="text-2xs text-text-muted">Últimas {recentNotes.length}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={onViewNotes}
+                  className="text-xs text-accent font-semibold hover:underline"
+                >
+                  Ver todas
+                </button>
+              </div>
+              <div className="space-y-2">
+                {recentNotes.map(note => (
+                  <div key={note.id} className="px-3 py-2 bg-surface-2 rounded-xl">
+                    {note.theme && (
+                      <span className="text-2xs font-semibold text-accent block mb-0.5">{note.theme}</span>
+                    )}
+                    <p className="text-xs text-text-secondary truncate">
+                      {note.content.slice(0, 50)}{note.content.length > 50 ? '…' : ''}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+        </div>
       )}
 
       {/* Tab toggle */}

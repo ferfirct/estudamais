@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { GraduationCap, Timer, BarChart3, Flame, Settings, Dumbbell } from 'lucide-react';
+import { GraduationCap, Timer, BarChart3, Flame, Settings, Dumbbell, NotebookPen, Layers } from 'lucide-react';
 import SessionView from './views/SessionView.jsx';
 import QuizView from './views/QuizView.jsx';
 import DashboardView from './views/DashboardView.jsx';
 import AuthView from './views/AuthView.jsx';
 import SettingsView from './views/SettingsView.jsx';
+import AdminView from './views/AdminView.jsx';
 import PracticeView from './views/PracticeView.jsx';
+import NotesView from './views/NotesView.jsx';
+import FlashcardsView from './views/FlashcardsView.jsx';
 import { Toaster } from './ui.jsx';
 import { useTheme } from './hooks/useTheme.js';
 import { getMe } from './api/auth.js';
 import { getSettings } from './api/settings.js';
 import { listSessions } from './api/sessions.js';
+import { getAggregatedData } from './api/aggregated.js';
 import { setToken } from './api/client.js';
 import {
   computeInsights,
@@ -18,6 +22,7 @@ import {
   isStreakAtRisk,
   scheduleStreakCheck,
   requestNotificationPermission,
+  getReviewsDue,
 } from './lib.js';
 
 function mapForInsights(s) {
@@ -37,6 +42,7 @@ export default function App() {
   const [pendingSession, setPendingSession] = useState(null);
   const [dailyGoal, setDailyGoal] = useState(60);
   const [streak, setStreak] = useState({ currentStreak: 0, longestStreak: 0 });
+  const [aggregatedData, setAggregatedData] = useState(null);
 
   const { theme, setTheme } = useTheme('dark');
 
@@ -61,6 +67,14 @@ export default function App() {
       .finally(() => setAuthReady(true));
   }, []);
 
+  // Fetch aggregated data from BFF when user logs in
+  useEffect(() => {
+    if (!user?.id) return;
+    getAggregatedData(user.id)
+      .then(setAggregatedData)
+      .catch(() => { /* BFF unavailable — graceful degradation */ });
+  }, [user?.id]);
+
   // Listen for 401 logout event
   useEffect(() => {
     function onLogout() {
@@ -71,6 +85,13 @@ export default function App() {
     return () => window.removeEventListener('auth:logout', onLogout);
   }, []);
 
+  // Prevent non-admins from accessing admin view
+  useEffect(() => {
+    if (view === 'admin' && user?.role !== 'admin') {
+      setView('session');
+    }
+  }, [view, user]);
+
   const refreshSessions = useCallback(async () => {
     try {
       const data = await listSessions();
@@ -80,6 +101,11 @@ export default function App() {
 
   const insights = useMemo(
     () => computeInsights(sessions.map(mapForInsights)),
+    [sessions]
+  );
+
+  const reviewsDue = useMemo(
+    () => getReviewsDue(sessions.map(mapForInsights)),
     [sessions]
   );
 
@@ -201,7 +227,12 @@ export default function App() {
     { key: 'session', label: 'Estudar', icon: Timer },
     { key: 'practice', label: 'Praticar', icon: Dumbbell },
     { key: 'dashboard', label: 'Métricas', icon: BarChart3, badge: sessions.length },
+    { key: 'flashcards', label: 'Flashcards', icon: Layers },
+    { key: 'notes', label: 'Anotações', icon: NotebookPen },
   ];
+  if (user?.role === 'admin') {
+    navItems.push({ key: 'admin', label: 'Admin', icon: Settings });
+  }
 
   const streakAtRisk = isStreakAtRisk(streak);
 
@@ -283,6 +314,7 @@ export default function App() {
             insights={insights}
             dailyGoal={dailyGoal}
             recentThemes={recentThemes}
+            reviewsDue={reviewsDue}
           />
         )}
         {view === 'quiz' && pendingSession && (
@@ -300,6 +332,9 @@ export default function App() {
             onClearHistory={handleClearHistory}
             onStartSession={handleStartSession}
             onEditGoal={setDailyGoal}
+            onStartFlashcards={() => setView('flashcards')}
+            onViewNotes={() => setView('notes')}
+            aggregatedData={aggregatedData}
           />
         )}
         {view === 'practice' && (
@@ -308,11 +343,15 @@ export default function App() {
             onStartWrongPractice={handleStartWrongPractice}
           />
         )}
+        {view === 'flashcards' && <FlashcardsView />}
+        {view === 'notes' && <NotesView user={user} />}
+        {view === 'admin' && <AdminView user={user} />}
         {view === 'settings' && (
           <SettingsView
             user={user}
             onLogout={handleLogout}
             onThemeChange={setTheme}
+            onUserUpdate={setUser}
           />
         )}
       </main>

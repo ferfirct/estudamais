@@ -1,17 +1,33 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Moon, Sun, Monitor, Bell, BellOff, LogOut, Target } from 'lucide-react';
+import { Moon, Sun, Monitor, Bell, BellOff, LogOut, Target, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { getSettings, updateSettings } from '../api/settings.js';
+import { updateProfile, changePassword } from '../api/auth.js';
 import { setToken } from '../api/client.js';
+import { toast } from '../lib.js';
 
 function debounce(fn, ms) {
   let t;
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }
 
-export default function SettingsView({ user, onLogout, onThemeChange }) {
+export default function SettingsView({ user, onLogout, onThemeChange, onUserUpdate }) {
   const [settings, setSettings] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  const [nameInput, setNameInput] = useState(user?.name ?? '');
+  const [emailInput, setEmailInput] = useState(user?.email ?? '');
+  const [nameSaving, setNameSaving] = useState(false);
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [nameSuccess, setNameSuccess] = useState(false);
+  const [emailSuccess, setEmailSuccess] = useState(false);
+
+  const [pwOpen, setPwOpen] = useState(false);
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwError, setPwError] = useState('');
 
   useEffect(() => {
     getSettings()
@@ -45,6 +61,55 @@ export default function SettingsView({ user, onLogout, onThemeChange }) {
     onLogout();
   }
 
+  async function handleSaveName() {
+    if (nameInput.trim() === user?.name || !nameInput.trim()) return;
+    setNameSaving(true);
+    try {
+      const updated = await updateProfile({ name: nameInput.trim() });
+      onUserUpdate?.(prev => ({ ...prev, ...updated }));
+      setNameSuccess(true);
+      setTimeout(() => setNameSuccess(false), 2000);
+    } catch (e) {
+      toast({ title: e.message || 'Erro ao salvar nome', variant: 'error' });
+    } finally {
+      setNameSaving(false);
+    }
+  }
+
+  async function handleSaveEmail() {
+    if (emailInput.trim() === user?.email || !emailInput.trim()) return;
+    setEmailSaving(true);
+    try {
+      const updated = await updateProfile({ email: emailInput.trim() });
+      onUserUpdate?.(prev => ({ ...prev, ...updated }));
+      setEmailSuccess(true);
+      setTimeout(() => setEmailSuccess(false), 2000);
+    } catch (e) {
+      toast({ title: e.message || 'Erro ao salvar email', variant: 'error' });
+    } finally {
+      setEmailSaving(false);
+    }
+  }
+
+  async function handleChangePassword() {
+    if (!currentPw || !newPw || newPw !== confirmPw) {
+      setPwError(newPw !== confirmPw ? 'As senhas não coincidem.' : 'Preencha todos os campos.');
+      return;
+    }
+    setPwError('');
+    setPwSaving(true);
+    try {
+      await changePassword({ currentPassword: currentPw, newPassword: newPw });
+      toast({ title: 'Senha alterada com sucesso', variant: 'success' });
+      setCurrentPw(''); setNewPw(''); setConfirmPw('');
+      setPwOpen(false);
+    } catch (e) {
+      setPwError(e.message || 'Erro ao alterar senha.');
+    } finally {
+      setPwSaving(false);
+    }
+  }
+
   if (!settings) {
     return (
       <div className="flex items-center justify-center py-24 text-text-muted">
@@ -66,18 +131,96 @@ export default function SettingsView({ user, onLogout, onThemeChange }) {
         <p className="text-text-muted text-sm mt-1">Personalize sua experiência no Estuda+</p>
       </div>
 
-      {/* Perfil */}
+      {/* Minha conta */}
       <section className="bg-surface border border-border rounded-3xl p-6 shadow-card">
-        <h2 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-4">Perfil</h2>
-        <div className="space-y-3">
-          <div className="flex justify-between items-center py-2">
-            <span className="text-sm text-text-secondary">Nome</span>
-            <span className="text-sm font-semibold text-text-primary">{user?.name}</span>
+        <h2 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-4">Minha conta</h2>
+        <div className="space-y-4">
+          {/* Nome */}
+          <div>
+            <label className="text-xs font-semibold text-text-muted block mb-1.5">Nome</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={nameInput}
+                onChange={e => setNameInput(e.target.value)}
+                className="flex-1 bg-surface-2 border border-border rounded-xl px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent transition-colors"
+              />
+              {nameInput.trim() !== user?.name && nameInput.trim() && (
+                <button
+                  onClick={handleSaveName}
+                  disabled={nameSaving}
+                  className="px-3 py-2 rounded-xl bg-accent text-bg text-xs font-semibold hover:bg-accent-hover transition-colors disabled:opacity-60"
+                >
+                  {nameSuccess ? <Check size={14} /> : nameSaving ? '…' : 'Salvar'}
+                </button>
+              )}
+            </div>
           </div>
-          <div className="h-px bg-border" />
-          <div className="flex justify-between items-center py-2">
-            <span className="text-sm text-text-secondary">Email</span>
-            <span className="text-sm font-mono text-text-muted">{user?.email}</span>
+
+          {/* Email */}
+          <div>
+            <label className="text-xs font-semibold text-text-muted block mb-1.5">Email</label>
+            <div className="flex gap-2">
+              <input
+                type="email"
+                value={emailInput}
+                onChange={e => setEmailInput(e.target.value)}
+                className="flex-1 bg-surface-2 border border-border rounded-xl px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent transition-colors"
+              />
+              {emailInput.trim() !== user?.email && emailInput.trim() && (
+                <button
+                  onClick={handleSaveEmail}
+                  disabled={emailSaving}
+                  className="px-3 py-2 rounded-xl bg-accent text-bg text-xs font-semibold hover:bg-accent-hover transition-colors disabled:opacity-60"
+                >
+                  {emailSuccess ? <Check size={14} /> : emailSaving ? '…' : 'Salvar'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Alterar senha */}
+          <div>
+            <button
+              onClick={() => setPwOpen(!pwOpen)}
+              className="flex items-center gap-2 text-xs font-semibold text-text-muted hover:text-text-secondary transition-colors"
+            >
+              {pwOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              Alterar senha
+            </button>
+            {pwOpen && (
+              <div className="mt-3 space-y-2">
+                <input
+                  type="password"
+                  value={currentPw}
+                  onChange={e => setCurrentPw(e.target.value)}
+                  placeholder="Senha atual"
+                  className="w-full bg-surface-2 border border-border rounded-xl px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent transition-colors"
+                />
+                <input
+                  type="password"
+                  value={newPw}
+                  onChange={e => setNewPw(e.target.value)}
+                  placeholder="Nova senha"
+                  className="w-full bg-surface-2 border border-border rounded-xl px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent transition-colors"
+                />
+                <input
+                  type="password"
+                  value={confirmPw}
+                  onChange={e => setConfirmPw(e.target.value)}
+                  placeholder="Confirmar nova senha"
+                  className="w-full bg-surface-2 border border-border rounded-xl px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent transition-colors"
+                />
+                {pwError && <p className="text-xs text-danger">{pwError}</p>}
+                <button
+                  onClick={handleChangePassword}
+                  disabled={pwSaving || !currentPw || !newPw || !confirmPw}
+                  className="w-full py-2 rounded-xl bg-accent text-bg text-sm font-semibold hover:bg-accent-hover transition-colors disabled:opacity-60"
+                >
+                  {pwSaving ? 'Salvando…' : 'Confirmar'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </section>

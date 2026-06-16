@@ -14,6 +14,8 @@ import {
   RotateCcw,
   Zap,
   Info,
+  CalendarClock,
+  X,
 } from 'lucide-react';
 import { Button, IconButton, Card, Input, Badge, ProgressBar } from '../ui.jsx';
 import { formatTime, formatMinutes, useTimer, useKeyboard, toast } from '../lib.js';
@@ -36,7 +38,7 @@ const POMODORO_PRESETS = [
   { label: 'Maratona', minutes: 90, description: 'Tópicos densos' },
 ];
 
-export default function SessionView({ onFinish, insights, dailyGoal, recentThemes }) {
+export default function SessionView({ onFinish, insights, dailyGoal, recentThemes, reviewsDue = [] }) {
   const [topic, setTopic] = useState('');
   const [targetMinutes, setTargetMinutes] = useState(25);
   const [questionCount, setQuestionCount] = useState(5);
@@ -44,8 +46,12 @@ export default function SessionView({ onFinish, insights, dailyGoal, recentTheme
   const [difficulty, setDifficulty] = useState('medium');
   const [learningMode, setLearningMode] = useState(false);
   const [quizType, setQuizType] = useState('free');
+  const [quizSubtype, setQuizSubtype] = useState('');
   const [explainAfterAnswer, setExplainAfterAnswer] = useState(true);
   const [distributionError, setDistributionError] = useState('');
+  const [simulatedMode, setSimulatedMode] = useState(false);
+  const [timePerQuestion, setTimePerQuestion] = useState(60);
+  const [reviewsDismissed, setReviewsDismissed] = useState(false);
   const timer = useTimer();
 
   const progress = useMemo(() => {
@@ -109,7 +115,10 @@ export default function SessionView({ onFinish, insights, dailyGoal, recentTheme
       difficulty,
       learningMode,
       quizType,
+      quizSubtype: quizSubtype || undefined,
       explainAfterAnswer,
+      simulatedMode,
+      timePerQuestion,
     });
     setTopic('');
   };
@@ -120,6 +129,37 @@ export default function SessionView({ onFinish, insights, dailyGoal, recentTheme
   if (timer.status === 'idle') {
     return (
       <div className="animate-in max-w-4xl mx-auto">
+        {/* Widget revisão programada */}
+        {reviewsDue.length > 0 && !reviewsDismissed && (
+          <div className="mb-6 p-4 rounded-2xl border border-accent-border bg-accent-soft flex items-start gap-3">
+            <CalendarClock size={18} className="text-accent shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-text-primary mb-2">
+                {reviewsDue.length === 1 ? 'Um tema pede revisão' : `${reviewsDue.length} temas pedem revisão`}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {reviewsDue.slice(0, 3).map(r => (
+                  <button
+                    key={r.theme}
+                    onClick={() => { setTopic(r.theme); setReviewsDismissed(true); }}
+                    className="px-3 py-1.5 text-xs bg-surface border border-border rounded-lg text-text-secondary hover:text-accent hover:border-accent-border transition-all flex items-center gap-1.5"
+                  >
+                    {r.theme}
+                    <span className="text-text-dim font-mono">{r.lastScore}/10</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={() => setReviewsDismissed(true)}
+              className="text-text-dim hover:text-text-muted transition-colors shrink-0"
+              aria-label="Dispensar"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
         {/* KPIs do dia */}
         <div className="grid grid-cols-3 gap-3 mb-10">
           <Card className="p-4">
@@ -398,7 +438,7 @@ export default function SessionView({ onFinish, insights, dailyGoal, recentTheme
               ].map((opt) => (
                 <button
                   key={opt.value}
-                  onClick={() => setQuizType(opt.value)}
+                  onClick={() => { setQuizType(opt.value); setQuizSubtype(''); }}
                   className={`p-3 rounded-xl border transition-all text-left ${
                     quizType === opt.value
                       ? 'bg-accent-soft border-accent-border shadow-glow'
@@ -416,8 +456,61 @@ export default function SessionView({ onFinish, insights, dailyGoal, recentTheme
                 </button>
               ))}
             </div>
+
+            {quizType === 'civil_service' && (
+              <div className="mt-4">
+                <p className="text-2xs font-semibold uppercase tracking-wider text-text-muted mb-3">
+                  Banca / Concurso específico
+                </p>
+                <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+                  {['', 'CESPE/CEBRASPE', 'FCC', 'FGV', 'VUNESP', 'IDECAN', 'IBFC', 'PF', 'PRF', 'TRF', 'TCU', 'INSS'].map((sub) => (
+                    <button
+                      key={sub || '__any__'}
+                      onClick={() => setQuizSubtype(sub)}
+                      className={`p-2.5 rounded-xl border transition-all text-center ${
+                        quizSubtype === sub
+                          ? 'bg-accent-soft border-accent-border shadow-glow'
+                          : 'bg-surface-2 border-border hover:border-border-strong'
+                      }`}
+                      aria-pressed={quizSubtype === sub}
+                    >
+                      <span className={`text-xs font-semibold ${quizSubtype === sub ? 'text-accent' : 'text-text-secondary'}`}>
+                        {sub || 'Qualquer banca'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {quizType === 'vestibular' && (
+              <div className="mt-4">
+                <p className="text-2xs font-semibold uppercase tracking-wider text-text-muted mb-3">
+                  Vestibular específico
+                </p>
+                <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+                  {['', 'ENEM', 'FUVEST', 'UNICAMP', 'UNESP', 'UFPR', 'USP', 'UFMG', 'UEL', 'UFRGS', 'PUC-PR'].map((sub) => (
+                    <button
+                      key={sub || '__any__'}
+                      onClick={() => setQuizSubtype(sub)}
+                      className={`p-2.5 rounded-xl border transition-all text-center ${
+                        quizSubtype === sub
+                          ? 'bg-accent-soft border-accent-border shadow-glow'
+                          : 'bg-surface-2 border-border hover:border-border-strong'
+                      }`}
+                      aria-pressed={quizSubtype === sub}
+                    >
+                      <span className={`text-xs font-semibold ${quizSubtype === sub ? 'text-accent' : 'text-text-secondary'}`}>
+                        {sub || 'Qualquer vestibular'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {(quizType === 'civil_service' || quizType === 'vestibular') && (
-              <p className="text-2xs text-text-muted mt-2 flex items-center gap-1">
+              <p className="text-2xs text-text-muted mt-3 flex items-center gap-1">
                 <Info size={11} />
                 A IA se baseia em questões reais deste tipo de prova.
               </p>
@@ -466,6 +559,52 @@ export default function SessionView({ onFinish, insights, dailyGoal, recentTheme
                   }`}
                 />
               </button>
+            </Card>
+
+            <Card className="p-4 md:col-span-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-text-primary">Modo Simulado</p>
+                  <p className="text-2xs text-text-muted">Cada questão tem um timer regressivo. Simula a pressão de prova real.</p>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={simulatedMode}
+                  onClick={() => setSimulatedMode(!simulatedMode)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ml-4 ${
+                    simulatedMode ? 'bg-accent' : 'bg-surface-3 border border-border'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      simulatedMode ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+              {simulatedMode && (
+                <div className="mt-4">
+                  <p className="text-2xs font-semibold uppercase tracking-wider text-text-muted mb-2">
+                    Tempo por questão
+                  </p>
+                  <div className="flex gap-2">
+                    {[30, 60, 90].map(t => (
+                      <button
+                        key={t}
+                        onClick={() => setTimePerQuestion(t)}
+                        className={`flex-1 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                          timePerQuestion === t
+                            ? 'bg-accent-soft border-accent-border text-accent'
+                            : 'bg-surface-2 border-border text-text-muted hover:border-border-strong'
+                        }`}
+                        aria-pressed={timePerQuestion === t}
+                      >
+                        {t}s
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </Card>
           </div>
 
