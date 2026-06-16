@@ -1,121 +1,134 @@
 # Estuda+
 
-> Não apenas conte as horas, teste a sua absorção.
+Não apenas conte as horas, teste a sua absorção.
 
-Deploy do frontend: https://black-bay-0bad40610.6.azurestaticapps.net/
+## Deploy em Produção
 
-## Estrutura do monorepo
+| Componente | URL |
+|---|---|
+| Frontend | https://estudamais.pages.dev |
+| API Gateway | https://estudamais-apim.azure-api.net |
+| BFF (Swagger) | https://estudamais-bff-production.up.railway.app/docs |
+| MS Sessions (Swagger) | https://estudamais-ms-sessions-production.up.railway.app/docs |
+| MS Users (Swagger) | https://estudamais-ms-users-production.up.railway.app/docs |
+| Azure Function | https://estudamais-bxamfjdkcteqhrfs.eastus-01.azurewebsites.net/api/calculate-efficiency |
 
-```
+## Arquitetura
+
+Sistema distribuído com microsserviços + BFF:
+Frontend (React) → API Gateway (Azure APIM) → BFF (Express)
+├─→ MS Sessions (MongoDB Atlas)
+├─→ MS Users (PostgreSQL Railway)
+└─→ Azure Function (cálculo de eficiência)
+
+## Estrutura do Monorepo
 estuda+project/
-├── EstudaMais/   # Frontend React 19 + Vite
-└── backend/      # Backend Node.js + Express + TypeScript
-```
+├── EstudaMais/          # Frontend React 19 + Vite
+├── bff/                 # BFF — agrega MS Sessions + MS Users + Azure Function
+├── ms-sessions/         # Microsserviço de sessões (MongoDB)
+├── ms-users/            # Microsserviço de usuários e auth (PostgreSQL)
+├── estudamais-function/ # Azure Function — cálculo de eficiência
+└── backend/             # (legado) monólito original, mantido para referência
 
-## Backend (TypeScript)
-
-### Instalação
-
-```bash
-cd backend
-npm install
-cp .env.example .env
-# edite .env e coloque sua GROQ_API_KEY (grátis em console.groq.com)
-```
-
-### Chave de API gratuita (Groq)
-
-O backend usa o **Groq** como provider de IA, que é 100% gratuito:
-
-1. Acesse https://console.groq.com
-2. Crie conta (só e-mail, sem cartão de crédito)
-3. Em "API Keys", clique em "Create API Key"
-4. Cole a chave no `.env`: `GROQ_API_KEY=gsk_...`
-
-**Tier gratuito:** 30 req/min, 14.400 req/dia rodando Llama 3.3 70B. Mais que suficiente para uso pessoal/acadêmico.
-
-### Scripts
-
-```bash
-npm run dev        # desenvolvimento com hot reload (tsx watch)
-npm run build      # compila TypeScript para dist/
-npm start          # roda build compilado
-npm run typecheck  # valida tipos sem emitir
-```
-
-### Rotas
-
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| GET    | `/api/health` | Health check |
-| POST   | `/api/sessions` | Cria sessão (`{ theme, startTime? }`) |
-| PATCH  | `/api/sessions/:id` | Atualiza sessão ao finalizar |
-| GET    | `/api/sessions` | Lista sessões (`?needsReview=true` filtra score < 6) |
-| GET    | `/api/sessions/:id` | Detalhe de uma sessão |
-| POST   | `/api/quiz/generate` | Gera quiz via Anthropic |
-| POST   | `/api/quiz/evaluate` | Avalia respostas e salva score |
-| GET    | `/api/dashboard/stats` | Agregados para o dashboard |
-
-Persistência: arquivo `backend/db.json` criado automaticamente.
-
-Todos os erros retornam `{ error: string, details?: unknown }`.
-
-## Frontend (React + Vite)
-
-### Instalação
+## Frontend
 
 ```bash
 cd EstudaMais
 npm install
 cp .env.example .env
-# opcional: ajuste VITE_API_URL se o backend rodar em outro host
 npm run dev
 ```
 
-### Camada de API
+Por padrão, `VITE_API_URL` aponta para o BFF em produção. Para usar o BFF local, ajuste essa variável no `.env`.
 
-Toda comunicação com o backend (e, por consequência, com a Anthropic) passa por
-`src/api/`:
-
-```js
-import { sessionsApi, quizApi, dashboardApi, ApiError } from './api';
-
-const session = await sessionsApi.createSession('Leis de Newton');
-const { questions } = await quizApi.generateQuiz({
-  sessionId: session.id,
-  theme: session.theme,
-  durationMinutes: 25,
-});
-```
-
-O cliente HTTP centralizado (`src/api/client.js`) trata erros via `ApiError` e
-garante degradação graciosa quando o backend está offline.
-
-## Rodando tudo em desenvolvimento
-
-Em dois terminais:
+## BFF
 
 ```bash
-# Terminal 1
-cd backend && npm run dev
-
-# Terminal 2
-cd EstudaMais && npm run dev
+cd bff
+npm install
+cp .env.example .env
+npm run dev
 ```
 
-Frontend em `http://localhost:5173`, backend em `http://localhost:3333`.
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | /aggregated-data | Agrega dados de usuário, sessões e eficiência em uma resposta |
+
+Swagger disponível em `/docs`.
+
+## MS Sessions (MongoDB)
+
+```bash
+cd ms-sessions
+npm install
+cp .env.example .env
+npm run dev
+```
+
+| Método | Rota | Descrição |
+|---|---|---|
+| POST | /api/sessions | Cria sessão de estudo |
+| GET | /api/sessions | Lista sessões do usuário |
+| GET | /api/sessions/:id | Busca sessão por id |
+| PATCH | /api/sessions/:id | Atualiza sessão |
+| DELETE | /api/sessions/:id | Remove sessão |
+
+## MS Users (PostgreSQL)
+
+```bash
+cd ms-users
+npm install
+cp .env.example .env
+npm run dev
+```
+
+| Método | Rota | Descrição |
+|---|---|---|
+| POST | /api/auth/register | Registra novo usuário |
+| POST | /api/auth/login | Autentica usuário (retorna JWT) |
+| GET | /api/users/me | Retorna usuário autenticado |
+| PATCH | /api/users/me | Atualiza usuário autenticado |
+| DELETE | /api/users/me | Remove usuário autenticado |
+
+## Azure Function
+
+HTTP Trigger que calcula o índice de eficiência:
+POST /api/calculate-efficiency
+{ "score": 8, "durationMinutes": 60 }
+→ { "efficiencyIndex": 8, "classification": "Média" }
+
+## IA — Groq API
+
+Geração e avaliação de quiz usa Groq (Llama 3.3 70B), gratuito:
+
+1. Crie conta em console.groq.com
+2. Gere uma API Key
+3. Adicione em `ms-sessions/.env`: `GROQ_API_KEY=gsk_...`
+
+Pool de chaves com fallback automático em caso de rate limit.
+
+## Testes
+
+```bash
+npm run test:arch   # testes de arquitetura (ArchUnitTS)
+npm test             # testes unitários de domínio
+```
+
+Implementados em BFF, MS Sessions, MS Users e Frontend — 28 testes no total.
 
 ## Segurança
 
-A `GROQ_API_KEY` vive **apenas** no backend. O frontend nunca recebe ou
-embute a chave — toda geração/avaliação de quiz é proxied pelo Express.
+- HTTPS em todos os serviços
+- JWT Bearer token para autenticação (MS Users)
+- Chave Groq apenas no backend — frontend nunca recebe a chave
+- Azure APIM subscription key para acesso externo ao gateway
 
 ## Equipe
 
-Fernando Chociai  
-Gabriel Coltre  
-João Marcelo  
-João Vitor Franzedo Carmo  
-Leander Hallu  
+- Fernando Chociai
+- Gabriel Coltre
+- João Marcelo
+- João Vitor Franzedo Carmo
+- Leander Hallu
 
 PUCPR — Projeto PJBL 2026
